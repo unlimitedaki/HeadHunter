@@ -132,7 +132,7 @@ class BertAttRanker(BertPreTrainedModel):
 
 
         reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
-        
+        logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
 
         outputs = (reshaped_logits,)
