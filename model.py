@@ -85,8 +85,8 @@ class BertAttRanker(BertPreTrainedModel):
         self.cs_len = cs_len
         self.bert = BertModel(config)
         self.self_att = SelfAttention(config)
-        self.classifier = nn.Linear(config.hidden_size,1)
-        # self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
+        # self.classifier = nn.Linear(config.hidden_size,1)
+        self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
 
@@ -124,13 +124,14 @@ class BertAttRanker(BertPreTrainedModel):
 
         atten_output = self.self_att(reshaped_output)
         # pdb.set_trace()
-        mean_pooled_output = atten_output.mean(dim=1)
+        # mean_pooled_output = atten_output.mean(dim=1)
 
-        mean_pooled_output = self.dropout(mean_pooled_output)
+        # mean_pooled_output = self.dropout(mean_pooled_output)
         
-        logits = self.classifier(mean_pooled_output)
+        # logits = self.classifier(mean_pooled_output)
 
-        reshaped_output = atten_output.view()
+
+        reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
         
         reshaped_logits = logits.view(-1, num_choices)
 
