@@ -148,8 +148,8 @@ class CSQARankerProcessor():
                     label = label
                 )
             )
-            if len(choices_features) != 25:
-                pdb.set_trace()
+            # if len(choices_features) != 25:
+            #     pdb.set_trace()
         
         return features
 
