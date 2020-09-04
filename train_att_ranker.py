@@ -180,8 +180,9 @@ def train(args):
             if (step + 1)% args.check_loss_step == 0 or step == len(train_dataloader):
                 avg_loss = tr_loss/(step+1)
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
+            # break
         # Eval : one time one epoch
-        torch.cuda.empty_cache() # realize cuda cache so that we can eval 
+        torch.cuda.empty_cache() # release cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
         # result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
         logger.info("Accuracy : {} on epoch {}".format(acc,epoch))
@@ -250,6 +251,8 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
   return 
 
 def eval(args,model,dataloader,set_name,device,num_examples):
+    # pdb.set_trace()
+    torch.cuda.empty_cache()
     logger.info("Evaluate on {}".format(set_name))
     iterator = tqdm(dataloader, desc="Iteration")
     correct_count = 0
