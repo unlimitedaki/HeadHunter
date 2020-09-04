@@ -197,9 +197,9 @@ def train(args):
                     os.makedirs(best_model_dir)
                 model_to_save.save_pretrained(best_model_dir)
                 logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
-                prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-                with open(prediction_file,'w',encoding= 'utf8') as f:
-                    json.dump(result_json,f,indent = 2,ensure_ascii = False)
+                # prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+                # with open(prediction_file,'w',encoding= 'utf8') as f:
+                #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
             # save model 
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
             current_model_dir = os.path.join(output_dir,"current_model")
