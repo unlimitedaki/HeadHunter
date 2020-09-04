@@ -76,11 +76,12 @@ def train(args):
     logger.addHandler(fh)
 
     # setup tokenizer
-    if args.tokenizer_name_or_path:
-        tokenizer_name_or_path = args.tokenizer_name_or_path
-    else:
-        tokenizer_name_or_path = "bert-base-cased"
-    tokenizer = BertTokenizer.from_pretrained(tokenizer_name_or_path)
+    # if args.tokenizer_name_or_path:
+    #     tokenizer_name_or_path = args.tokenizer_name_or_path
+    # else:
+    #     tokenizer_name_or_path = "bert-base-cased"
+    # tokenizer = BertTokenizer.from_pretrained(tokenizer_name_or_path)
+    tokenizer = BertTokenizer.from_pretrained(args.origin_model)
 
     # load data
     if args.cs_len > 0:
@@ -113,7 +114,7 @@ def train(args):
         
     else:
         cache = os.path.join(args.output_dir,"cache")
-        model = BertAttRanker.from_pretrained("bert-base-cased",cache_dir = cache,cs_len = args.cs_len)
+        model = BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
         status = {}
         status['best_epoch'] = 0
         status['best_Acc'] = 0.0
@@ -182,7 +183,7 @@ def train(args):
         # Eval : one time one epoch
         torch.cuda.empty_cache() # realize cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
-        result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
+        # result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
         logger.info("Accuracy : {} on epoch {}".format(acc,epoch))
         if args.save_method == "Best_Current":
             if acc > status['best_Acc']:
@@ -206,9 +207,9 @@ def train(args):
             model_to_save.save_pretrained(current_model_dir)
             logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
             #save predictions
-            prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-            with open(prediction_file,'w',encoding= 'utf8') as f:
-                json.dump(result_json,f,indent = 2,ensure_ascii = False)
+            # prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+            # with open(prediction_file,'w',encoding= 'utf8') as f:
+            #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
         else:
             # save model of every epoch
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
