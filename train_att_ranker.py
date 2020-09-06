@@ -180,7 +180,7 @@ def train(args):
             if (step + 1)% args.check_loss_step == 0 or step == len(train_dataloader):
                 avg_loss = tr_loss/(step+1)
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
-            break
+            # break
         # Eval : one time one epoch
         torch.cuda.empty_cache() # release cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
