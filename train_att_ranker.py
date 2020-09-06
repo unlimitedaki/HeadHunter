@@ -180,7 +180,7 @@ def train(args):
             if (step + 1)% args.check_loss_step == 0 or step == len(train_dataloader):
                 avg_loss = tr_loss/(step+1)
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
-            # break
+            break
         # Eval : one time one epoch
         torch.cuda.empty_cache() # release cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
@@ -256,7 +256,7 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
             bad_prediction.append(bad_pred)
     
     bad_prediction_file = "{}_{}_bad_prediction.json".format(data_type,args.cs_mode)
-    bad_prediction_file = os.path.join(os.path.join(args.output_dir,args.save_model_name))
+    bad_prediction_file = os.path.join(os.path.join(args.output_dir,args.save_model_name),bad_prediction_file)
     bad_prediction_file  = open(bad_prediction_file,'w',encoding = 'utf8')
     json.dump(bad_prediction_file, bad_prediction, indent = 2,ensure_ascii = False)
     return 
