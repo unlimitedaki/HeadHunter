@@ -184,7 +184,7 @@ def train(args):
         # Eval : one time one epoch
         torch.cuda.empty_cache() # release cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
-        # result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
+        result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
         logger.info("Accuracy : {} on epoch {}".format(acc,epoch))
         if args.save_method == "Best_Current":
             if acc > status['best_Acc']:
@@ -197,9 +197,9 @@ def train(args):
                     os.makedirs(best_model_dir)
                 model_to_save.save_pretrained(best_model_dir)
                 logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
-                # prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-                # with open(prediction_file,'w',encoding= 'utf8') as f:
-                #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
+                prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+                with open(prediction_file,'w',encoding= 'utf8') as f:
+                    json.dump(result_json,f,indent = 2,ensure_ascii = False)
             # save model 
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
             current_model_dir = os.path.join(output_dir,"current_model")
@@ -207,10 +207,10 @@ def train(args):
                 os.makedirs(current_model_dir)
             model_to_save.save_pretrained(current_model_dir)
             logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
-            #save predictions
-            # prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-            # with open(prediction_file,'w',encoding= 'utf8') as f:
-            #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
+            # save predictions
+            prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+            with open(prediction_file,'w',encoding= 'utf8') as f:
+                json.dump(result_json,f,indent = 2,ensure_ascii = False)
         else:
             # save model of every epoch
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
@@ -225,30 +225,41 @@ def train(args):
         json.dump(status,open(status_dir,'w',encoding = 'utf8'))
 
 def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
-  cs_file = "{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
-  cs_file = os.path.join(args.cs_dir,cs_file)
-  with open(cs_file,'r',encoding="utf8") as f:
-      cs_data = json.load(f)
-  # put result into examples
-  
-  pred_index = 0 #because it's sequential, we can just index it with examples
-  result_json = {}
-  for example in tqdm(examples,desc="puting result into examples"):
-      result_json[example.id] = {}
-      result_json[example.id]['question'] = example.question
-      # result_json[example.id]['endings'] = []
-      result_json[example.id]['prediction'] = predictions[pred_index]
-      result_json[example.id]["prediction_answer"] = example.endings[predictions[pred_index]]
-      pred_index += 1
-      result_json[example.id]['label'] = example.label
-      example_cs = cs_data[example.id]
-      result_json[example.id]['endings'] = example_cs['endings']
-      for ending in result_json[example.id]['endings']:
-          if args.cs_save_mode == 'id':
-              ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
-          else:
-              ending['cs'] = ending["cs"][:args.cs_len]
-  return 
+    cs_file = "{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
+    cs_file = os.path.join(args.cs_dir,cs_file)
+    with open(cs_file,'r',encoding="utf8") as f:
+        cs_data = json.load(f)
+    # put result into examples
+    bad_prediction = []
+    pred_index = 0 #because it's sequential, we can just index it with examples
+    result_json = {}
+    for example in tqdm(examples,desc="puting result into examples"):
+        try:
+            result_json[example.id] = {}
+            result_json[example.id]['question'] = example.question
+            # result_json[example.id]['endings'] = []
+            result_json[example.id]['prediction'] = predictions[pred_index]
+            result_json[example.id]["prediction_answer"] = example.endings[predictions[pred_index]]
+            pred_index += 1
+            result_json[example.id]['label'] = example.label
+            example_cs = cs_data[example.id]
+            result_json[example.id]['endings'] = example_cs['endings']
+            for ending in result_json[example.id]['endings']:
+                if args.cs_save_mode == 'id':
+                    ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
+                else:
+                    ending['cs'] = ending["cs"][:args.cs_len]
+        except Exception as ex:
+            bad_pred = {}
+            bad_pred['example_id']= example.id
+            bad_pred['prediction'] = predictions[pred_index]
+            bad_prediction.append(bad_pred)
+    
+    bad_prediction_file = "{}_{}_bad_prediction.json".format(data_type,args.cs_mode)
+    bad_prediction_file = os.path.join(os.path.join(args.output_dir,args.save_model_name))
+    bad_prediction_file  = open(bad_prediction_file,'w',encoding = 'utf8')
+    json.dump(bad_prediction_file, bad_prediction, indent = 2,ensure_ascii = False)
+    return 
 
 def eval(args,model,dataloader,set_name,device,num_examples):
     # pdb.set_trace()
