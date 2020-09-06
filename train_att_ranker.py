@@ -184,8 +184,8 @@ def train(args):
         # Eval : one time one epoch
         torch.cuda.empty_cache() # release cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
-        result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
         logger.info("Accuracy : {} on epoch {}".format(acc,epoch))
+        result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
         if args.save_method == "Best_Current":
             if acc > status['best_Acc']:
                 status['best_Acc'] = acc.cpu().numpy().tolist()
@@ -258,8 +258,8 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
     bad_prediction_file = "{}_{}_bad_prediction.json".format(data_type,args.cs_mode)
     bad_prediction_file = os.path.join(os.path.join(args.output_dir,args.save_model_name),bad_prediction_file)
     bad_prediction_file  = open(bad_prediction_file,'w',encoding = 'utf8')
-    json.dump(bad_prediction_file, bad_prediction, indent = 2,ensure_ascii = False)
-    return 
+    json.dump(bad_prediction,bad_prediction_file,indent = 2,ensure_ascii = False)
+    return result_json
 
 def eval(args,model,dataloader,set_name,device,num_examples):
     # pdb.set_trace()
