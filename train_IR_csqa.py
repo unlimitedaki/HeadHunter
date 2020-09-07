@@ -76,23 +76,24 @@ def train(args):
     logger.addHandler(fh)
 
     # setup tokenizer
-    if args.tokenizer_name_or_path:
-        tokenizer_name_or_path = args.tokenizer_name_or_path
-    else:
-        tokenizer_name_or_path = "bert-base-cased"
-    tokenizer = BertTokenizer.from_pretrained(tokenizer_name_or_path)
+    # if args.tokenizer_name_or_path:
+    #     tokenizer_name_or_path = args.tokenizer_name_or_path
+    # else:
+    #     tokenizer_name_or_path = "bert-base-cased"
+    tokenizer = BertTokenizer.from_pretrained(args.origin_model)
 
     # load data
+    omcs_corpus = load_omcs(args)
     if args.cs_len > 0:
         # omcs_corpus = None
-        omcs_corpus = load_omcs(args)
+        
         _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
         dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
         _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
 
     else:
         _,_,train_dataset= load_csqa_dataset(tokenizer,args,"train")
-        _,_,dev_dataset= load_csqa_dataset(tokenizer,args,"dev")
+        dev_examples,_,dev_dataset= load_csqa_dataset(tokenizer,args,"dev")
         _,_,test_dataset= load_csqa_dataset(tokenizer,args,"test",is_training = False)
     
     train_sampler = RandomSampler(train_dataset) 
@@ -113,7 +114,7 @@ def train(args):
         
     else:
         cache = os.path.join(args.output_dir,"cache")
-        model = BertForMultipleChoice.from_pretrained("bert-base-cased",cache_dir = cache)
+        model = BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
         status = {}
         status['best_epoch'] = 0
         status['best_Acc'] = 0.0
@@ -244,7 +245,7 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
               ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
           else:
               ending['cs'] = ending["cs"][:args.cs_len]
-  return 
+  return result_json
 
 def eval(args,model,dataloader,set_name,device,num_examples):
     logger.info("Evaluate on {}".format(set_name))

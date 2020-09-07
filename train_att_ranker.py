@@ -75,12 +75,7 @@ def train(args):
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
 
-    # setup tokenizer
-    # if args.tokenizer_name_or_path:
-    #     tokenizer_name_or_path = args.tokenizer_name_or_path
-    # else:
-    #     tokenizer_name_or_path = "bert-base-cased"
-    # tokenizer = BertTokenizer.from_pretrained(tokenizer_name_or_path)
+   
     tokenizer = BertTokenizer.from_pretrained(args.origin_model)
 
     # load data
