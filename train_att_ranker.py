@@ -68,6 +68,7 @@ def select_tokenizer(args):
         return BertTokenizer.from_pretrained(args.origin_model)
 
 def select_model(args):
+    cache = os.path.join(args.output_dir,"cache")
     if "albert" in args.origin_model:
         return AlbertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
     elif "bert" in args.origin_model:
@@ -88,7 +89,7 @@ def train(args):
 
    
     # tokenizer = BertTokenizer.from_pretrained(args.origin_model)
-    tokenizr = select_tokenizer(args)
+    tokenizer = select_tokenizer(args)
 
     # load data
     if args.cs_len > 0:

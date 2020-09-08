@@ -1,4 +1,4 @@
-from transformers import BertPreTrainedModel,BertModel,AlbertModel,AlbertPretrainedModel
+from transformers import BertPreTrainedModel,BertModel,AlbertModel,AlbertPreTrainedModel
 from torch.nn import CrossEntropyLoss
 import torch
 import torch.nn as nn
