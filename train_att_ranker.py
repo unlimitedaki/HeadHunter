@@ -5,7 +5,7 @@ if os.path.exists("external_libraries"):
 import torch
 import transformers
 import json
-from transformers import BertModel,BertTokenizer
+from transformers import BertModel,BertTokenizer,AlbertTokenizer
 from tqdm import tqdm
 import logging
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
@@ -61,6 +61,18 @@ def clean_omcs(file_name):
     corpus = list(set(corpus))
     return corpus
 
+def select_tokenizer(args):
+    if "albert" in args.origin_model:
+        return AlbertTokenizer.from_pretrained(args.origin_model)
+    elif "bert" in args.origin_model:
+        return BertTokenizer.from_pretrained(args.origin_model)
+
+def select_model(args):
+    cache = os.path.join(args.output_dir,"cache")
+    if "albert" in args.origin_model:
+        return AlbertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
+    elif "bert" in args.origin_model:
+        return BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
 
 
 def train(args):
@@ -76,7 +88,8 @@ def train(args):
     logger.addHandler(fh)
 
    
-    tokenizer = BertTokenizer.from_pretrained(args.origin_model)
+    # tokenizer = BertTokenizer.from_pretrained(args.origin_model)
+    tokenizer = select_tokenizer(args)
 
     # load data
     if args.cs_len > 0:
@@ -109,7 +122,8 @@ def train(args):
         
     else:
         cache = os.path.join(args.output_dir,"cache")
-        model = BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
+        # model = BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
+        model = select_model(args)
         status = {}
         status['best_epoch'] = 0
         status['best_Acc'] = 0.0
