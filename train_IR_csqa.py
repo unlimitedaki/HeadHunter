@@ -5,7 +5,7 @@ if os.path.exists("external_libraries"):
 import torch
 import transformers
 import json
-from transformers import BertModel,BertTokenizer
+from transformers import BertModel,BertTokenizer,AlbertTokenizer
 from tqdm import tqdm
 import logging
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
@@ -62,6 +62,19 @@ def clean_omcs(file_name):
     return corpus
 
 
+def select_tokenizer(args):
+    if "albert" in args.origin_model:
+        return AlbertTokenizer.from_pretrained(args.origin_model)
+    elif "bert" in args.origin_model:
+        return BertTokenizer.from_pretrained(args.origin_model)
+
+def select_model(args):
+    cache = os.path.join(args.output_dir,"cache")
+    if "albert" in args.origin_model:
+        return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+    elif "bert" in args.origin_model:
+        return BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+
 
 def train(args):
     # setup output dir for model and log
@@ -80,7 +93,8 @@ def train(args):
     #     tokenizer_name_or_path = args.tokenizer_name_or_path
     # else:
     #     tokenizer_name_or_path = "bert-base-cased"
-    tokenizer = BertTokenizer.from_pretrained(args.origin_model)
+    # tokenizer = BertTokenizer.from_pretrained(args.origin_model)
+    tokenizer = select_tokenizer(args)
 
     # load data
     omcs_corpus = load_omcs(args)
@@ -114,7 +128,8 @@ def train(args):
         
     else:
         cache = os.path.join(args.output_dir,"cache")
-        model = BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        # model = BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        model = select_model(args)
         status = {}
         status['best_epoch'] = 0
         status['best_Acc'] = 0.0
