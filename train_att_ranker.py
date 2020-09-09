@@ -190,6 +190,8 @@ def train(args):
                 avg_loss = tr_loss/(step+1)
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
             # break
+            if (step+1)%20==0:
+                break;
         # Eval : one time one epoch
         torch.cuda.empty_cache() # release cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
@@ -278,20 +280,21 @@ def eval(args,model,dataloader,set_name,device,num_examples):
     correct_count = 0
     predictions = []
     # total = 0
-    for step,batch in enumerate(iterator):
-        model.eval()
-        batch = tuple(t.to(device) for t in batch)
-        inputs = {
-            "input_ids": batch[0],
-            "attention_mask": batch[1],
-            "token_type_ids": batch[2],
-            "labels": batch[3]
-        }
-        outputs = model(**inputs)
-        logits = outputs[1]
-        prediction = torch.argmax(logits,axis = 1)
-        correct_count += (prediction == batch[3]).sum().float()
-        predictions += prediction.cpu().numpy().tolist()
+    with torch.no_grad():
+        for step,batch in enumerate(iterator):
+            model.eval()
+            batch = tuple(t.to(device) for t in batch)
+            inputs = {
+                "input_ids": batch[0],
+                "attention_mask": batch[1],
+                "token_type_ids": batch[2],
+                "labels": batch[3]
+            }
+            outputs = model(**inputs)
+            logits = outputs[1]
+            prediction = torch.argmax(logits,axis = 1)
+            correct_count += (prediction == batch[3]).sum().float()
+            predictions += prediction.cpu().numpy().tolist()
     return correct_count/num_examples, predictions
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',

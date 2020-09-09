@@ -176,6 +176,7 @@ class AlbertAttRanker(AlbertPreTrainedModel):
             if inputs_embeds is not None
             else None
         )
+        # pdb.set_trace()
 
         bert_outputs = self.bert(
             input_ids,
