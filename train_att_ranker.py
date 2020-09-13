@@ -80,6 +80,10 @@ def train(args):
     output_dir = os.path.join(args.output_dir,args.save_model_name)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    # save args
+    arg_dict = args.__dict__
+    with open(os.path.join(output_dir,"args.json"),'w',encoding='utf8') as f:
+        json.dump(arg_dict)
 
     # setup logging
     logfilename = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())+" "+args.save_model_name+".log.txt"
@@ -342,5 +346,7 @@ if __name__ == "__main__":
 
     # args = parser.parse_args() 在notebook 里 args 需要初始化为[],外部调用py文件不需要
     args = parser.parse_args()
+
+    args_dict = args.__dict__
 
     train(args)
