@@ -83,7 +83,7 @@ def train(args):
     # save args
     arg_dict = args.__dict__
     with open(os.path.join(output_dir,"args.json"),'w',encoding='utf8') as f:
-        json.dump(arg_dict)
+        json.dump(arg_dict,f,indent=2,ensure_ascii=False)
 
     # setup logging
     logfilename = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())+" "+args.save_model_name+".log.txt"
