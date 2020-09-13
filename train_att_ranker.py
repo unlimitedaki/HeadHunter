@@ -347,6 +347,4 @@ if __name__ == "__main__":
     # args = parser.parse_args() 在notebook 里 args 需要初始化为[],外部调用py文件不需要
     args = parser.parse_args()
 
-    args_dict = args.__dict__
-
     train(args)

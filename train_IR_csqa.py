@@ -82,11 +82,17 @@ def train(args):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    arg_dict = args.__dict__
+    with open(os.path.join(output_dir,"args.json"),'w',encoding='utf8') as f:
+        json.dump(arg_dict,f,indent=2,ensure_ascii=False)
+        
     # setup logging
     logfilename = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())+" "+args.save_model_name+".log.txt"
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
+
+
 
     # setup tokenizer
     # if args.tokenizer_name_or_path:
