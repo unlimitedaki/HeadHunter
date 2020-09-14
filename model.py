@@ -1,4 +1,4 @@
-from transformers import BertPreTrainedModel,BertModel,AlbertModel,AlbertPreTrainedModel,RobertaPreTrainedModel,XlnetPreTrainedModel
+from transformers import BertPreTrainedModel,BertModel,AlbertModel,AlbertPreTrainedModel,RobertaModel
 from torch.nn import CrossEntropyLoss
 import torch
 import torch.nn as nn
@@ -116,7 +116,7 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
-class RobertaForMultipleChoice(RobertaPreTrainedModel):
+class RobertaForMultipleChoice(BertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -324,11 +324,11 @@ class AlbertAttRanker(AlbertPreTrainedModel):
 
         return outputs
 
-class RobertaAttRanker(RobertaPreTrainedModel):
+class RobertaAttRanker(BertPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
         self.cs_len = cs_len
-        self.bert = AlbertModel(config)
+        self.bert = RobertaModel(config)
         self.self_att = SelfAttention(config)
         # self.classifier = nn.Linear(config.hidden_size,1)
         self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)

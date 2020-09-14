@@ -5,7 +5,7 @@ if os.path.exists("external_libraries"):
 import torch
 import transformers
 import json
-from transformers import BertModel,BertTokenizer,AlbertTokenizer
+from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer
 from tqdm import tqdm
 import logging
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
@@ -66,7 +66,7 @@ def select_tokenizer(args):
     if "albert" in args.origin_model:
         return AlbertTokenizer.from_pretrained(args.origin_model)
     elif "roberta" in args.origin_model:
-        return RobertaTokenizer.from_pretrained(args.origin_model,cache_dir = cache)
+        return RobertaTokenizer.from_pretrained(args.origin_model)
     elif "bert" in args.origin_model:
         return BertTokenizer.from_pretrained(args.origin_model)
 
@@ -179,12 +179,19 @@ def train(args):
         for step, batch in enumerate(epoch_iterator):
             model.train()
             batch = tuple(t.to(device) for t in batch)
-            inputs = {
+            if 'roberta' in args.origin_model:
+                inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
-                "token_type_ids": batch[2],
-                "labels": batch[3]
-            }
+                "labels": batch[2]
+                }
+            else:
+                inputs = {
+                    "input_ids": batch[0],
+                    "attention_mask": batch[1],
+                    "token_type_ids": batch[2],
+                    "labels": batch[3]
+                }
             outputs = model(**inputs)
             # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
@@ -203,7 +210,7 @@ def train(args):
                 model.zero_grad()
             # check average training loss
             if (step + 1)% args.check_loss_step == 0 or step == len(train_dataloader):
-                avg_loss = tr_loss/(step+1)
+                avg_loss = (tr_loss/(step+1))*args.gradient_accumulation_steps
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
         # Eval : one time one epoch
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
@@ -283,16 +290,24 @@ def eval(args,model,dataloader,set_name,device,num_examples):
         for step,batch in enumerate(iterator):
             model.eval()
             batch = tuple(t.to(device) for t in batch)
-            inputs = {
+            if 'roberta' in args.origin_model:
+                inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
-                "token_type_ids": batch[2],
-                "labels": batch[3]
-            }
+                "labels": batch[2]
+                }
+            else:
+                inputs = {
+                    "input_ids": batch[0],
+                    "attention_mask": batch[1],
+                    "token_type_ids": batch[2],
+                    "labels": batch[3]
+                }
             outputs = model(**inputs)
             logits = outputs[1]
             prediction = torch.argmax(logits,axis = 1)
-            correct_count += (prediction == batch[3]).sum().float()
+            
+            correct_count += (prediction == inputs["labels"]).sum().float()
             predictions += prediction.cpu().numpy().tolist()
     return correct_count/num_examples, predictions
 
