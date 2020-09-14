@@ -65,6 +65,8 @@ def clean_omcs(file_name):
 def select_tokenizer(args):
     if "albert" in args.origin_model:
         return AlbertTokenizer.from_pretrained(args.origin_model)
+    elif "roberta" in args.origin_model:
+        return RobertaTokenizer.from_pretrained(args.origin_model,cache_dir = cache)
     elif "bert" in args.origin_model:
         return BertTokenizer.from_pretrained(args.origin_model)
 
@@ -72,6 +74,8 @@ def select_model(args):
     cache = os.path.join(args.output_dir,"cache")
     if "albert" in args.origin_model:
         return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+    elif "roberta" in args.origin_model:
+        return RobertaForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
     elif "bert" in args.origin_model:
         return BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
 
