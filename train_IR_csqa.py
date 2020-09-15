@@ -5,7 +5,7 @@ if os.path.exists("external_libraries"):
 import torch
 import transformers
 import json
-from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer
+from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
 from tqdm import tqdm
 import logging
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
@@ -69,6 +69,9 @@ def select_tokenizer(args):
         return RobertaTokenizer.from_pretrained(args.origin_model)
     elif "bert" in args.origin_model:
         return BertTokenizer.from_pretrained(args.origin_model)
+    elif "xlnet" in args.origin_model:
+        return XLNetTokenizer.from_pretrained(args.origin_model)
+
 
 def select_model(args):
     cache = os.path.join(args.output_dir,"cache")
@@ -78,6 +81,9 @@ def select_model(args):
         return RobertaForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
     elif "bert" in args.origin_model:
         return BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+    elif "xlnet" in args.origin_model:
+        return XLNetForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        
 
 
 def train(args):
