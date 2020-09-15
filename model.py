@@ -1,6 +1,7 @@
 from transformers import BertPreTrainedModel,BertModel,AlbertModel,AlbertPreTrainedModel,RobertaModel,XLNetPreTrainedModel,XLNetModel
 from transformers.modeling_utils import SequenceSummary
 from torch.nn import CrossEntropyLoss
+import torch.nn.functional as F
 import torch
 import torch.nn as nn
 import pdb
@@ -49,7 +50,7 @@ class BertForMultipleChoice(BertPreTrainedModel):
         )
 
         pooled_output = outputs[1]
-
+        pdb.set_trace()
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
@@ -141,7 +142,7 @@ class RobertaForMultipleChoice(BertPreTrainedModel):
         labels=None,
         output_attentions=False,
     ):
-        
+        pdb.set_trace()
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
         input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
@@ -165,6 +166,7 @@ class RobertaForMultipleChoice(BertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
+        reshaped_logits = F.softmax(reshaped_logits,1)
 
         outputs = (reshaped_logits,) + outputs[2:]  # add hidden states and attention if they are here
 
