@@ -96,14 +96,12 @@ def train(args):
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
 
+    # setup seed
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
 
-
-    # setup tokenizer
-    # if args.tokenizer_name_or_path:
-    #     tokenizer_name_or_path = args.tokenizer_name_or_path
-    # else:
-    #     tokenizer_name_or_path = "bert-base-cased"
-    # tokenizer = BertTokenizer.from_pretrained(args.origin_model)
     tokenizer = select_tokenizer(args)
 
     # load data
@@ -353,6 +351,7 @@ if __name__ == "__main__":
     parser.add_argument("--do_finetune",action = "store_true",default = False)
     parser.add_argument("--cs_mode",type = str,default = "wholeQA-Match")
     parser.add_argument("--cs_save_mode",type = str,default = "id")
+    parser.add_argument("--seed",type = int,default = 1,help = "freeze seed")
 
     # args = parser.parse_args() 在notebook 里 args 需要初始化为[],外部调用py文件不需要
     args = parser.parse_args()
