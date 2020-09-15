@@ -229,6 +229,7 @@ class CSQAProcessor():
                     pad_to_max_length = True,
                     truncation_strategy = 'longest_first'
                 )
+                # pdb.set_trace()
                 input_ids, attention_mask = inputs['input_ids'],inputs['attention_mask']
                 if "token_type_ids" in inputs.keys():
                     token_type_ids= inputs['token_type_ids']
