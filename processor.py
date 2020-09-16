@@ -218,6 +218,8 @@ class CSQAProcessor():
                 if example.context == None:
                     sen1 = example.question
                     sen2 = ending
+                    sen1 = tokenizer.tokenize(sen1)
+                    sen2 = tokenizer.tokenize(ending)
                 else:
                     sen1 = self.join_cs(tokenizer,example.context[ending_index],example.question)
                     sen1 = tokenizer.tokenize(sen1)
@@ -236,10 +238,11 @@ class CSQAProcessor():
                 if "token_type_ids" in inputs.keys():
                     token_type_ids= inputs['token_type_ids']
                 else:
+                    token_type_ids = attention_mask.copy()
+                    token_type_ids[:len(sen1)+1] = [0]*(len(sen1)+1)
                     
-                    token_type_ids = [0] + [0] * len(sen1) + [1] + [1] * len(sen2)
-                    if len(token_type_ids) < max_seq_length:
-                        token_type_ids += [tokenizer.pad_token_type_id] * (max_seq_length - len(token_type_ids))
+                    # if len(token_type_ids) < max_seq_length:
+                    #     token_type_ids += [tokenizer.pad_token_type_id] * (max_seq_length - len(token_type_ids))
 
                 choices_features.append((input_ids, attention_mask, token_type_ids))
 
