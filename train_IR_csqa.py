@@ -352,7 +352,7 @@ if __name__ == "__main__":
     parser.add_argument("--cs_len",type = int, default = 5)
     # settings
     parser.add_argument("--n_gpu",type=int , default = 1)
-    parser.add_argument("--fp16",type = bool,default = True)
+    parser.add_argument("--fp16",type =bool,default = False)
     parser.add_argument("--save_method",type = str,default = "Best_Current")
     parser.add_argument("--do_finetune",action = "store_true",default = False)
     parser.add_argument("--cs_mode",type = str,default = "wholeQA-Match")

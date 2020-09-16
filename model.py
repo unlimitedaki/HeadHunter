@@ -142,7 +142,7 @@ class RobertaForMultipleChoice(BertPreTrainedModel):
         labels=None,
         output_attentions=False,
     ):
-        pdb.set_trace()
+        # pdb.set_trace()
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
         input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None

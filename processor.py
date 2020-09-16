@@ -220,6 +220,7 @@ class CSQAProcessor():
                     sen2 = ending
                 else:
                     sen1 = self.join_cs(tokenizer,example.context[ending_index],example.question)
+                    sen1 = tokenizer.tokenize(sen1)
                     sen2 = tokenizer.tokenize(ending)
                 inputs = tokenizer.encode_plus(
                     sen1,
@@ -231,10 +232,14 @@ class CSQAProcessor():
                 )
                 # pdb.set_trace()
                 input_ids, attention_mask = inputs['input_ids'],inputs['attention_mask']
+                pdb.set_trace()
                 if "token_type_ids" in inputs.keys():
                     token_type_ids= inputs['token_type_ids']
                 else:
-                    token_type_ids = None
+                    
+                    token_type_ids = [0] + [0] * len(sen1) + [1] + [1] * len(sen2)
+                    if len(token_type_ids) < max_seq_length:
+                        token_type_ids += [tokenizer.pad_token_id] * (max_seq_length - len(token_type_ids))
 
                 choices_features.append((input_ids, attention_mask, token_type_ids))
 
@@ -314,19 +319,19 @@ def load_csqa_dataset(tokenizer,args,data_type,is_training=True):
 
     all_input_ids = torch.tensor([f.select_field("input_ids") for f in features], dtype=torch.long)
     all_attention_masks = torch.tensor([f.select_field("attention_mask") for f in features], dtype=torch.long)
-    if "roberta" in args.origin_model:
-        all_token_type_ids = None
-    else:
-        all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
+    # if "roberta" in args.origin_model:
+    #     all_token_type_ids = None
+    # else:
+    all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
     if is_training :
         all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
-        if "roberta" in args.origin_model:
-            dataset = TensorDataset(all_input_ids,all_attention_masks, all_labels)
-        else:
-            dataset = TensorDataset(all_input_ids,all_attention_masks, all_token_type_ids, all_labels)
+        # if "roberta" in args.origin_model:
+        #     dataset = TensorDataset(all_input_ids,all_attention_masks, all_labels)
+        # else:
+        dataset = TensorDataset(all_input_ids,all_attention_masks, all_token_type_ids, all_labels)
     else:
-        if "roberta" in args.origin_model:
-            dataset = TensorDataset(all_input_ids,all_attention_masks)
-        else:
-            dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
+        # if "roberta" in args.origin_model:
+        #     dataset = TensorDataset(all_input_ids,all_attention_masks)
+        # else:
+        dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
     return examples,features,dataset
