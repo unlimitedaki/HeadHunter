@@ -50,7 +50,7 @@ class BertForMultipleChoice(BertPreTrainedModel):
         )
 
         pooled_output = outputs[1]
-        pdb.set_trace()
+        # pdb.set_trace()
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
@@ -147,14 +147,15 @@ class RobertaForMultipleChoice(BertPreTrainedModel):
 
         input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
         attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
-        token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
+        # token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
+        token_type_ids = None
         position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
         inputs_embeds = (
             inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
             if inputs_embeds is not None
             else None
         )
-
+        # pdb.set_trace()
         outputs = self.bert(
             input_ids,
             attention_mask=attention_mask,
@@ -162,12 +163,11 @@ class RobertaForMultipleChoice(BertPreTrainedModel):
         )
 
         pooled_output = outputs[1]
-
+        
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
-        reshaped_logits = F.softmax(reshaped_logits,1)
-
+        # pdb.set_trace()
         outputs = (reshaped_logits,) + outputs[2:]  # add hidden states and attention if they are here
 
         if labels is not None:
@@ -176,6 +176,7 @@ class RobertaForMultipleChoice(BertPreTrainedModel):
             outputs = (loss,) + outputs
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
+
 
 
 class XLNetForMultipleChoice(XLNetPreTrainedModel):

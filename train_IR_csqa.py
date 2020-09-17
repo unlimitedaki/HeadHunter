@@ -183,19 +183,19 @@ def train(args):
         for step, batch in enumerate(epoch_iterator):
             model.train()
             batch = tuple(t.to(device) for t in batch)
-            if 'roberta' in args.origin_model:
-                inputs = {
+            # if 'roberta' in args.origin_model:
+            #     inputs = {
+            #     "input_ids": batch[0],
+            #     "attention_mask": batch[1],
+            #     "labels": batch[2]
+            #     }
+            # else:
+            inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
-                "labels": batch[2]
-                }
-            else:
-                inputs = {
-                    "input_ids": batch[0],
-                    "attention_mask": batch[1],
-                    "token_type_ids": batch[2],
-                    "labels": batch[3]
-                }
+                "token_type_ids": batch[2],
+                "labels": batch[3]
+            }
             outputs = model(**inputs)
             # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
@@ -294,19 +294,12 @@ def eval(args,model,dataloader,set_name,device,num_examples):
         for step,batch in enumerate(iterator):
             model.eval()
             batch = tuple(t.to(device) for t in batch)
-            if 'roberta' in args.origin_model:
-                inputs = {
+            inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
-                "labels": batch[2]
-                }
-            else:
-                inputs = {
-                    "input_ids": batch[0],
-                    "attention_mask": batch[1],
-                    "token_type_ids": batch[2],
-                    "labels": batch[3]
-                }
+                "token_type_ids": batch[2],
+                "labels": batch[3]
+            }
             outputs = model(**inputs)
             logits = outputs[1]
             prediction = torch.argmax(logits,axis = 1)

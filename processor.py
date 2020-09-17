@@ -239,10 +239,9 @@ class CSQAProcessor():
                     token_type_ids= inputs['token_type_ids']
                 else:
                     token_type_ids = attention_mask.copy()
-                    token_type_ids[:len(sen1)+1] = [0]*(len(sen1)+1)
                     
-                    # if len(token_type_ids) < max_seq_length:
-                    #     token_type_ids += [tokenizer.pad_token_type_id] * (max_seq_length - len(token_type_ids))
+                    if len(token_type_ids) != max_seq_length:
+                        pdb.set_trace()
 
                 choices_features.append((input_ids, attention_mask, token_type_ids))
 
