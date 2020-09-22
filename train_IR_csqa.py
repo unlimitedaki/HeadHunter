@@ -117,12 +117,12 @@ def train(args):
         
         _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
         dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
-        _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
+        # _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
 
     else:
         _,_,train_dataset= load_csqa_dataset(tokenizer,args,"train")
         dev_examples,_,dev_dataset= load_csqa_dataset(tokenizer,args,"dev")
-        _,_,test_dataset= load_csqa_dataset(tokenizer,args,"test",is_training = False)
+        # _,_,test_dataset= load_csqa_dataset(tokenizer,args,"test",is_training = False)
     
     train_sampler = RandomSampler(train_dataset) 
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
@@ -130,8 +130,8 @@ def train(args):
     dev_sampler = SequentialSampler(dev_dataset) 
     dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
 
-    test_sampler = SequentialSampler(test_dataset) 
-    test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=args.eval_batch_size)
+    # test_sampler = SequentialSampler(test_dataset) 
+    # test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=args.eval_batch_size)
 
     # load model
     if args.do_finetune:
