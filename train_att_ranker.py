@@ -5,7 +5,7 @@ if os.path.exists("external_libraries"):
 import torch
 import transformers
 import json
-from transformers import BertModel,BertTokenizer,AlbertTokenizer
+from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
 from tqdm import tqdm
 import logging
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
@@ -64,16 +64,23 @@ def clean_omcs(file_name):
 def select_tokenizer(args):
     if "albert" in args.origin_model:
         return AlbertTokenizer.from_pretrained(args.origin_model)
+    elif "roberta" in args.origin_model:
+        return RobertaTokenizer.from_pretrained(args.origin_model)
     elif "bert" in args.origin_model:
         return BertTokenizer.from_pretrained(args.origin_model)
+    elif "xlnet" in args.origin_model:
+        return XLNetTokenizer.from_pretrained(args.origin_model)
 
 def select_model(args):
     cache = os.path.join(args.output_dir,"cache")
     if "albert" in args.origin_model:
         return AlbertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
+    elif "roberta" in args.origin_model:
+        return RobertaAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
     elif "bert" in args.origin_model:
         return BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
-
+    elif "xlnet" in args.origin_model:
+        return XLNetAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
 
 def train(args):
     # setup output dir for model and log
