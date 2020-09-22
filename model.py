@@ -512,6 +512,7 @@ class XLNetAttRanker(XLNetPreTrainedModel):
         super().__init__(config)
         self.cs_len = cs_len
         self.transformer = XLNetModel(config)
+        self.sequence_summary = SequenceSummary(config)
         self.self_att = SelfAttention(config)
         self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.dropout)
@@ -545,9 +546,9 @@ class XLNetAttRanker(XLNetPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids
         )
-        pooled_output = self.
-        pooled_output = transformer_outputs[1]
-        
+
+        pooled_output = self.sequence_summary(transformer_outputs[0])
+        pooled_output = self.dropout(pooled_output)
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
 
         atten_output = self.self_att(reshaped_output)
