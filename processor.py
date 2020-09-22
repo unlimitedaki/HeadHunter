@@ -242,7 +242,7 @@ class CSQAProcessor():
                     
                     if len(token_type_ids) != max_seq_length:
                         pdb.set_trace()
-
+                # pdb.set_trace()
                 choices_features.append((input_ids, attention_mask, token_type_ids))
 
             label = example.label

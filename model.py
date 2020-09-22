@@ -233,59 +233,63 @@ class XLNetForMultipleChoice(XLNetPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
-        self.bert = XLNetModel(config)
+        self.transformer = XLNetModel(config)
         self.sequence_summary = SequenceSummary(config)
-        # self.dropout = nn.Dropout(config.dropout)
-        self.classifier = nn.Linear(config.hidden_size, 1)
+        self.logits_proj = nn.Linear(config.d_model, 1)
 
         self.init_weights()
 
-# @add_start_docstrings_to_callable(BERT_INPUTS_DOCSTRING.format("(batch_size, num_choices, sequence_length)"))
+# [DOCS]    @add_start_docstrings_to_callable(XLNET_INPUTS_DOCSTRING.format("(batch_size, num_choices, sequence_length)"))
     def forward(
         self,
         input_ids=None,
-        attention_mask=None,
         token_type_ids=None,
-        position_ids=None,
+        input_mask=None,
+        attention_mask=None,
+        mems=None,
+        perm_mask=None,
+        target_mapping=None,
         head_mask=None,
         inputs_embeds=None,
+        use_cache=True,
         labels=None,
-        output_attentions=False,
     ):
-        
-        num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
-        input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
-        attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
-        token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
-        position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
-        inputs_embeds = (
-            inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
-            if inputs_embeds is not None
-            else None
+        num_choices = input_ids.shape[1]
+
+        flat_input_ids = input_ids.view(-1, input_ids.size(-1))
+        flat_token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
+        flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
+        flat_input_mask = input_mask.view(-1, input_mask.size(-1)) if input_mask is not None else None
+
+        transformer_outputs = self.transformer(
+            flat_input_ids,
+            token_type_ids=flat_token_type_ids,
+            input_mask=flat_input_mask,
+            attention_mask=flat_attention_mask,
+            mems=mems,
+            perm_mask=perm_mask,
+            target_mapping=target_mapping,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
         )
 
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids
-        )
-        # pdb.set_trace()
-        pooled_output = self.sequence_summary(outputs[0])
+        output = transformer_outputs[0]
 
-        # pooled_output = self.dropout(pooled_output)
-        logits = self.classifier(pooled_output)
+        output = self.sequence_summary(output)
+        logits = self.logits_proj(output)
         reshaped_logits = logits.view(-1, num_choices)
-
-        outputs = (reshaped_logits,) + outputs[2:]  # add hidden states and attention if they are here
+        outputs = (reshaped_logits,) + transformer_outputs[
+            1:
+        ]  # Keep mems, hidden states, attentions if there are in it
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
-            loss = loss_fct(reshaped_logits, labels)
+            loss = loss_fct(reshaped_logits, labels.view(-1))
             outputs = (loss,) + outputs
 
-        return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
-
+        return outputs  # return (loss), logits, (mems), (hidden states), (attentions)
 
 ## reranker
 
