@@ -239,7 +239,6 @@ class XLNetForMultipleChoice(XLNetPreTrainedModel):
 
         self.init_weights()
 
-# [DOCS]    @add_start_docstrings_to_callable(XLNET_INPUTS_DOCSTRING.format("(batch_size, num_choices, sequence_length)"))
     def forward(
         self,
         input_ids=None,
@@ -512,9 +511,8 @@ class XLNetAttRanker(XLNetPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
         self.cs_len = cs_len
-        self.bert = XLNetModel(config)
+        self.transformer = XLNetModel(config)
         self.self_att = SelfAttention(config)
-        # self.classifier = nn.Linear(config.hidden_size,1)
         self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.dropout)
         self.init_weights()
@@ -540,25 +538,19 @@ class XLNetAttRanker(XLNetPreTrainedModel):
             if inputs_embeds is not None
             else None
         )
-        # pdb.set_trace()
 
-        bert_outputs = self.bert(
+
+        transformer_outputs = self.transformer(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids
         )
-
-        pooled_output = bert_outputs[1]
+        pooled_output = self.
+        pooled_output = transformer_outputs[1]
         
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
 
         atten_output = self.self_att(reshaped_output)
-        # pdb.set_trace()
-        # mean_pooled_output = atten_output.mean(dim=1)
-
-        # mean_pooled_output = self.dropout(mean_pooled_output)
-        
-        # logits = self.classifier(mean_pooled_output)
 
 
         reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
