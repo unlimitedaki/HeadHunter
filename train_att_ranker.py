@@ -198,11 +198,8 @@ def train(args):
                 model.zero_grad()
             # check average training loss
             if (step + 1)% args.check_loss_step == 0 or step == len(train_dataloader):
-                avg_loss = tr_loss/(step+1)
+                avg_loss = tr_loss/(step+1) * args.gradient_accumulation_steps
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
-            # break
-            if (step+1)%20==0:
-                break;
         # Eval : one time one epoch
         torch.cuda.empty_cache() # release cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
