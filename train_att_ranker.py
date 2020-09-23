@@ -5,7 +5,7 @@ if os.path.exists("external_libraries"):
 import torch
 import transformers
 import json
-from transformers import BertModel,BertTokenizer,AlbertTokenizer
+from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
 from tqdm import tqdm
 import logging
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
@@ -64,22 +64,33 @@ def clean_omcs(file_name):
 def select_tokenizer(args):
     if "albert" in args.origin_model:
         return AlbertTokenizer.from_pretrained(args.origin_model)
+    elif "roberta" in args.origin_model:
+        return RobertaTokenizer.from_pretrained(args.origin_model)
     elif "bert" in args.origin_model:
         return BertTokenizer.from_pretrained(args.origin_model)
+    elif "xlnet" in args.origin_model:
+        return XLNetTokenizer.from_pretrained(args.origin_model)
 
 def select_model(args):
     cache = os.path.join(args.output_dir,"cache")
     if "albert" in args.origin_model:
         return AlbertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
+    elif "roberta" in args.origin_model:
+        return RobertaAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
     elif "bert" in args.origin_model:
         return BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
-
+    elif "xlnet" in args.origin_model:
+        return XLNetAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
 
 def train(args):
     # setup output dir for model and log
     output_dir = os.path.join(args.output_dir,args.save_model_name)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    # save args
+    arg_dict = args.__dict__
+    with open(os.path.join(output_dir,"args.json"),'w',encoding='utf8') as f:
+        json.dump(arg_dict,f,indent=2,ensure_ascii=False)
 
     # setup logging
     logfilename = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())+" "+args.save_model_name+".log.txt"
@@ -187,9 +198,8 @@ def train(args):
                 model.zero_grad()
             # check average training loss
             if (step + 1)% args.check_loss_step == 0 or step == len(train_dataloader):
-                avg_loss = tr_loss/(step+1)
+                avg_loss = tr_loss/(step+1) * args.gradient_accumulation_steps
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
-            # break
         # Eval : one time one epoch
         torch.cuda.empty_cache() # release cuda cache so that we can eval 
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
@@ -278,20 +288,21 @@ def eval(args,model,dataloader,set_name,device,num_examples):
     correct_count = 0
     predictions = []
     # total = 0
-    for step,batch in enumerate(iterator):
-        model.eval()
-        batch = tuple(t.to(device) for t in batch)
-        inputs = {
-            "input_ids": batch[0],
-            "attention_mask": batch[1],
-            "token_type_ids": batch[2],
-            "labels": batch[3]
-        }
-        outputs = model(**inputs)
-        logits = outputs[1]
-        prediction = torch.argmax(logits,axis = 1)
-        correct_count += (prediction == batch[3]).sum().float()
-        predictions += prediction.cpu().numpy().tolist()
+    with torch.no_grad():
+        for step,batch in enumerate(iterator):
+            model.eval()
+            batch = tuple(t.to(device) for t in batch)
+            inputs = {
+                "input_ids": batch[0],
+                "attention_mask": batch[1],
+                "token_type_ids": batch[2],
+                "labels": batch[3]
+            }
+            outputs = model(**inputs)
+            logits = outputs[1]
+            prediction = torch.argmax(logits,axis = 1)
+            correct_count += (prediction == batch[3]).sum().float()
+            predictions += prediction.cpu().numpy().tolist()
     return correct_count/num_examples, predictions
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',

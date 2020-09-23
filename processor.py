@@ -218,8 +218,11 @@ class CSQAProcessor():
                 if example.context == None:
                     sen1 = example.question
                     sen2 = ending
+                    sen1 = tokenizer.tokenize(sen1)
+                    sen2 = tokenizer.tokenize(ending)
                 else:
                     sen1 = self.join_cs(tokenizer,example.context[ending_index],example.question)
+                    sen1 = tokenizer.tokenize(sen1)
                     sen2 = tokenizer.tokenize(ending)
                 inputs = tokenizer.encode_plus(
                     sen1,
@@ -229,8 +232,17 @@ class CSQAProcessor():
                     pad_to_max_length = True,
                     truncation_strategy = 'longest_first'
                 )
-                input_ids, attention_mask, token_type_ids= inputs['input_ids'],inputs['attention_mask'],inputs['token_type_ids']
-
+                # pdb.set_trace()
+                input_ids, attention_mask = inputs['input_ids'],inputs['attention_mask']
+                # pdb.set_trace()
+                if "token_type_ids" in inputs.keys():
+                    token_type_ids= inputs['token_type_ids']
+                else:
+                    token_type_ids = attention_mask.copy()
+                    
+                    if len(token_type_ids) != max_seq_length:
+                        pdb.set_trace()
+                # pdb.set_trace()
                 choices_features.append((input_ids, attention_mask, token_type_ids))
 
             label = example.label
@@ -275,23 +287,6 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     # read examples
     processor = CSQAProcessor()
     examples = processor.read_examples(file_name,is_training)
-    # # if input str type cs
-    # if os.path.exists(os.path.join(args.cs_dir,"{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode))):
-    #     with open(os.path.join(args.cs_dir,"{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)),'r',encoding='utf8') as f:
-    #         cs_data = json.load(f)
-    #     examples = put_in_cs_json(examples,args.cs_len,cs_data)
-    # # else us id type cs
-    # else:
-    #     cs_filename = os.path.join(args.cs_dir,"{}_{}_omcs_results.json".format(data_type,args.cs_mode))
-    #     with open(cs_filename,'r',encoding = "utf8") as f:
-    #         cs_json = json.load(f)
-        
-    #     examples = put_in_cs(examples,cs_json,omcs_corpus,args.cs_len)
-    
-    # we use same format now, get cs_sentence form omcs_corpus by id in cs_data
-    examples = processor.read_examples(file_name,is_training)
-    
-    
     cs_result_file = "{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
     cs_result_path = os.path.join(args.cs_dir,cs_result_file)
     with open(cs_result_path,'r',encoding='utf8') as f:
@@ -326,10 +321,19 @@ def load_csqa_dataset(tokenizer,args,data_type,is_training=True):
 
     all_input_ids = torch.tensor([f.select_field("input_ids") for f in features], dtype=torch.long)
     all_attention_masks = torch.tensor([f.select_field("attention_mask") for f in features], dtype=torch.long)
+    # if "roberta" in args.origin_model:
+    #     all_token_type_ids = None
+    # else:
     all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
     if is_training :
         all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
+        # if "roberta" in args.origin_model:
+        #     dataset = TensorDataset(all_input_ids,all_attention_masks, all_labels)
+        # else:
         dataset = TensorDataset(all_input_ids,all_attention_masks, all_token_type_ids, all_labels)
     else:
+        # if "roberta" in args.origin_model:
+        #     dataset = TensorDataset(all_input_ids,all_attention_masks)
+        # else:
         dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
     return examples,features,dataset

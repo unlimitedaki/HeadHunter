@@ -5,7 +5,7 @@ if os.path.exists("external_libraries"):
 import torch
 import transformers
 import json
-from transformers import BertModel,BertTokenizer
+from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
 from tqdm import tqdm
 import logging
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
@@ -62,6 +62,29 @@ def clean_omcs(file_name):
     return corpus
 
 
+def select_tokenizer(args):
+    if "albert" in args.origin_model:
+        return AlbertTokenizer.from_pretrained(args.origin_model)
+    elif "roberta" in args.origin_model:
+        return RobertaTokenizer.from_pretrained(args.origin_model)
+    elif "bert" in args.origin_model:
+        return BertTokenizer.from_pretrained(args.origin_model)
+    elif "xlnet" in args.origin_model:
+        return XLNetTokenizer.from_pretrained(args.origin_model)
+
+
+def select_model(args):
+    cache = os.path.join(args.output_dir,"cache")
+    if "albert" in args.origin_model:
+        return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+    elif "roberta" in args.origin_model:
+        return RobertaForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+    elif "bert" in args.origin_model:
+        return BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+    elif "xlnet" in args.origin_model:
+        return XLNetForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        
+
 
 def train(args):
     # setup output dir for model and log
@@ -69,18 +92,23 @@ def train(args):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    arg_dict = args.__dict__
+    with open(os.path.join(output_dir,"args.json"),'w',encoding='utf8') as f:
+        json.dump(arg_dict,f,indent=2,ensure_ascii=False)
+        
     # setup logging
     logfilename = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())+" "+args.save_model_name+".log.txt"
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
 
-    # setup tokenizer
-    # if args.tokenizer_name_or_path:
-    #     tokenizer_name_or_path = args.tokenizer_name_or_path
-    # else:
-    #     tokenizer_name_or_path = "bert-base-cased"
-    tokenizer = BertTokenizer.from_pretrained(args.origin_model)
+    # setup seed
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+
+    tokenizer = select_tokenizer(args)
 
     # load data
     omcs_corpus = load_omcs(args)
@@ -89,12 +117,12 @@ def train(args):
         
         _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
         dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
-        _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
+        # _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
 
     else:
         _,_,train_dataset= load_csqa_dataset(tokenizer,args,"train")
         dev_examples,_,dev_dataset= load_csqa_dataset(tokenizer,args,"dev")
-        _,_,test_dataset= load_csqa_dataset(tokenizer,args,"test",is_training = False)
+        # _,_,test_dataset= load_csqa_dataset(tokenizer,args,"test",is_training = False)
     
     train_sampler = RandomSampler(train_dataset) 
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
@@ -102,8 +130,8 @@ def train(args):
     dev_sampler = SequentialSampler(dev_dataset) 
     dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
 
-    test_sampler = SequentialSampler(test_dataset) 
-    test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=args.eval_batch_size)
+    # test_sampler = SequentialSampler(test_dataset) 
+    # test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=args.eval_batch_size)
 
     # load model
     if args.do_finetune:
@@ -114,7 +142,8 @@ def train(args):
         
     else:
         cache = os.path.join(args.output_dir,"cache")
-        model = BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        # model = BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        model = select_model(args)
         status = {}
         status['best_epoch'] = 0
         status['best_Acc'] = 0.0
@@ -154,6 +183,13 @@ def train(args):
         for step, batch in enumerate(epoch_iterator):
             model.train()
             batch = tuple(t.to(device) for t in batch)
+            # if 'roberta' in args.origin_model:
+            #     inputs = {
+            #     "input_ids": batch[0],
+            #     "attention_mask": batch[1],
+            #     "labels": batch[2]
+            #     }
+            # else:
             inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
@@ -178,7 +214,7 @@ def train(args):
                 model.zero_grad()
             # check average training loss
             if (step + 1)% args.check_loss_step == 0 or step == len(train_dataloader):
-                avg_loss = tr_loss/(step+1)
+                avg_loss = (tr_loss/(step+1)) * args.gradient_accumulation_steps
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
         # Eval : one time one epoch
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
@@ -246,27 +282,30 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
           else:
               ending['cs'] = ending["cs"][:args.cs_len]
   return result_json
-
 def eval(args,model,dataloader,set_name,device,num_examples):
+    # pdb.set_trace()
+    torch.cuda.empty_cache()
     logger.info("Evaluate on {}".format(set_name))
     iterator = tqdm(dataloader, desc="Iteration")
     correct_count = 0
     predictions = []
     # total = 0
-    for step,batch in enumerate(iterator):
-        model.eval()
-        batch = tuple(t.to(device) for t in batch)
-        inputs = {
-            "input_ids": batch[0],
-            "attention_mask": batch[1],
-            "token_type_ids": batch[2],
-            "labels": batch[3]
-        }
-        outputs = model(**inputs)
-        logits = outputs[1]
-        prediction = torch.argmax(logits,axis = 1)
-        correct_count += (prediction == batch[3]).sum().float()
-        predictions += prediction.cpu().numpy().tolist()
+    with torch.no_grad():
+        for step,batch in enumerate(iterator):
+            model.eval()
+            batch = tuple(t.to(device) for t in batch)
+            inputs = {
+                "input_ids": batch[0],
+                "attention_mask": batch[1],
+                "token_type_ids": batch[2],
+                "labels": batch[3]
+            }
+            outputs = model(**inputs)
+            logits = outputs[1]
+            prediction = torch.argmax(logits,axis = 1)
+            
+            correct_count += (prediction == inputs["labels"]).sum().float()
+            predictions += prediction.cpu().numpy().tolist()
     return correct_count/num_examples, predictions
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -306,11 +345,12 @@ if __name__ == "__main__":
     parser.add_argument("--cs_len",type = int, default = 5)
     # settings
     parser.add_argument("--n_gpu",type=int , default = 1)
-    parser.add_argument("--fp16",type = bool,default = True)
+    parser.add_argument("--fp16",type =bool,default = False)
     parser.add_argument("--save_method",type = str,default = "Best_Current")
     parser.add_argument("--do_finetune",action = "store_true",default = False)
     parser.add_argument("--cs_mode",type = str,default = "wholeQA-Match")
     parser.add_argument("--cs_save_mode",type = str,default = "id")
+    parser.add_argument("--seed",type = int,default = 1,help = "freeze seed")
 
     # args = parser.parse_args() 在notebook 里 args 需要初始化为[],外部调用py文件不需要
     args = parser.parse_args()
