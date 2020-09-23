@@ -242,7 +242,7 @@ def train(index,args,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus):
                 logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
         # Eval : one time one epoch
         acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
-        result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
+        # result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
         logger.info("Accuracy : {} on epoch {}".format(acc,epoch))
         if args.save_method == "Best_Current":
             if acc > status['best_Acc']:
@@ -256,8 +256,8 @@ def train(index,args,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus):
                 model_to_save.save_pretrained(best_model_dir)
                 logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
                 prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-                with open(prediction_file,'w',encoding= 'utf8') as f:
-                    json.dump(result_json,f,indent = 2,ensure_ascii = False)
+                # with open(prediction_file,'w',encoding= 'utf8') as f:
+                #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
             # save model 
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
             current_model_dir = os.path.join(output_dir,"current_model")
@@ -266,9 +266,9 @@ def train(index,args,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus):
             model_to_save.save_pretrained(current_model_dir)
             logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
             #save predictions
-            prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-            with open(prediction_file,'w',encoding= 'utf8') as f:
-                json.dump(result_json,f,indent = 2,ensure_ascii = False)
+            # prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+            # with open(prediction_file,'w',encoding= 'utf8') as f:
+            #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
         else:
             # save model of every epoch
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
