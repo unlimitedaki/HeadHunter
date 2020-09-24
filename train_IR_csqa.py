@@ -183,13 +183,6 @@ def train(args):
         for step, batch in enumerate(epoch_iterator):
             model.train()
             batch = tuple(t.to(device) for t in batch)
-            # if 'roberta' in args.origin_model:
-            #     inputs = {
-            #     "input_ids": batch[0],
-            #     "attention_mask": batch[1],
-            #     "labels": batch[2]
-            #     }
-            # else:
             inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
@@ -197,7 +190,6 @@ def train(args):
                 "labels": batch[3]
             }
             outputs = model(**inputs)
-            # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
@@ -226,7 +218,6 @@ def train(args):
                 status['best_epoch'] = epoch
                 model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
                 best_model_dir = os.path.join(output_dir,"best_model")
-                # output_dir = os.path.join(output_dir, 'checkpoint-{}'.format(epoch + 1))
                 if not os.path.exists(best_model_dir):
                     os.makedirs(best_model_dir)
                 model_to_save.save_pretrained(best_model_dir)
@@ -234,7 +225,7 @@ def train(args):
                 prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
                 with open(prediction_file,'w',encoding= 'utf8') as f:
                     json.dump(result_json,f,indent = 2,ensure_ascii = False)
-            # save model 
+            # save model
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
             current_model_dir = os.path.join(output_dir,"current_model")
             if not os.path.exists(current_model_dir):
