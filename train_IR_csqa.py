@@ -88,7 +88,7 @@ def select_model(args):
         
 
 
-def train(index,args,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus,output_dir):
+def train(index,args,model,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus,output_dir):
     # setup output dir for model and log
     if not args.tpu:
         output_dir = os.path.join(args.output_dir,args.save_model_name)
@@ -145,7 +145,7 @@ def train(index,args,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus,o
             shuffle=False)
         train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
         train_size = len(train_dataloader)
-        print("paralle size {}".format(str()))
+        # print("paralle size {}".format(str()))
         t_total = train_size // args.gradient_accumulation_steps * args.num_train_epochs
         dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
         train_dataloader = pl.ParallelLoader(train_dataloader, [device]).per_device_loader(device)
@@ -164,22 +164,22 @@ def train(index,args,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus,o
     # test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=args.eval_batch_size)
 
     # load model
-    if args.do_finetune:
-        status_dir = os.path.join(output_dir,"status.json")
-        status = json.load(open(status_dir,'r'))
-        current_model = os.path.join(output_dir, "current_model")
-        model = BertForQuestionAnsweringWithMaskedLM.from_pretrained(current_model)
-        
-    else:
-        cache = os.path.join(args.output_dir,"cache")
-        # model = BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
-        model = select_model(args)
-        status = {}
-        status['best_epoch'] = 0
-        status['best_Acc'] = 0.0
-        status['current_epoch']  = 0
-        
-    model.to(device)
+        if args.do_finetune:
+            status_dir = os.path.join(output_dir,"status.json")
+            status = json.load(open(status_dir,'r'))
+            current_model = os.path.join(output_dir, "current_model")
+            model = BertForQuestionAnsweringWithMaskedLM.from_pretrained(current_model)
+            
+        else:
+            cache = os.path.join(args.output_dir,"cache")
+            # model = BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+            model = select_model(args)
+    status = {}
+    status['best_epoch'] = 0
+    status['best_Acc'] = 0.0
+    status['current_epoch']  = 0
+            
+    model = model.to(device)
 
     # Prepare optimizer and schedule (linear warmup and decay)
     
@@ -323,7 +323,9 @@ def tpu_training(args):
         _,_,train_dataset= load_csqa_dataset(tokenizer,args,"train")
         dev_examples,_,dev_dataset= load_csqa_dataset(tokenizer,args,"dev")
         # _,_,test_dataset= load_csqa_dataset(tokenizer,args,"test",
-    xmp.spawn(train,args = (args,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus,output_dir), nprocs=8, start_method='fork')
+    cache = os.path.join(args.output_dir,"cache")
+    model = select_model(args)
+    xmp.spawn(train,args = (args,model,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus,output_dir), nprocs=8, start_method='fork')
 
 def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
   cs_file = "OMCS/{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
