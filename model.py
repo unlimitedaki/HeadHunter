@@ -72,7 +72,7 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
         self.classifier = nn.Linear(config.hidden_size, 1)
 
         self.init_weights()
-        
+
     def forward(
         self,
         input_ids=None,
@@ -368,9 +368,8 @@ class RobertaAttRanker(BertPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
         self.cs_len = cs_len
-        self.bert = RobertaModel(config)
+        self.roberta = RobertaModel(config)
         self.self_att = SelfAttention(config)
-        # self.classifier = nn.Linear(config.hidden_size,1)
         self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
