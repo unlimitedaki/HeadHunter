@@ -136,7 +136,7 @@ class CSQARankerProcessor():
                         max_length = max_seq_length,
                         pad_to_max_length = True
                     )
-                    input_ids, attention_mask, token_type_ids= inputs['input_ids'],inputs['attention_mask']
+                    input_ids, attention_mask = inputs['input_ids'],inputs['attention_mask']
                     if "token_type_ids" in inputs.keys():
                         token_type_ids= inputs['token_type_ids']
                     else:
