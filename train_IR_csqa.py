@@ -283,49 +283,38 @@ def train(index,args,model,train_dataset,dev_examples,dev_dataset,logger,omcs_co
         status_dir = os.path.join(output_dir,"status.json")
         json.dump(status,open(status_dir,'w',encoding = 'utf8'))
 
-def tpu_training(args):
-
-    import torch_xla
-    import torch_xla.core.xla_model as xm
-    import torch_xla.distributed.xla_multiprocessing as xmp
+# for xla mutithread method, seems to be easier to use
+def train(args):
+    '''
+    Train the model, return Nothing
+    '''
+    # set up output_dir
     output_dir = os.path.join(args.output_dir,args.save_model_name)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-
+    # save all the args
     arg_dict = args.__dict__
     with open(os.path.join(output_dir,"args.json"),'w',encoding='utf8') as f:
-        json.dump(arg_dict,f,indent=2,ensure_ascii=False)
-        
+        json.dump(arg_dict,f,indent=2,ensure_ascii=False)\
     # setup logging
     logfilename = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())+" "+args.save_model_name+".log.txt"
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
-
-    # setup seed
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
-
-    tokenizer = select_tokenizer(args)
-
-    # load data
+    # loading data
     omcs_corpus = load_omcs(args)
     if args.cs_len > 0:
-        # omcs_corpus = None
-        
         _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
         dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
         # _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
-
     else:
         _,_,train_dataset= load_csqa_dataset(tokenizer,args,"train")
         dev_examples,_,dev_dataset= load_csqa_dataset(tokenizer,args,"dev")
-        # _,_,test_dataset= load_csqa_dataset(tokenizer,args,"test",
-    cache = os.path.join(args.output_dir,"cache")
-    model = select_model(args)
-    xmp.spawn(train,args = (args,model,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus,output_dir), nprocs=8, start_method='fork')
+    
+    # setup device
+    if args.g
+    
+
 
 def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
   cs_file = "OMCS/{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
@@ -351,6 +340,7 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
           else:
               ending['cs'] = ending["cs"][:args.cs_len]
   return result_json
+
 def eval(args,model,dataloader,set_name,device,num_examples):
     # pdb.set_trace()
     torch.cuda.empty_cache()
@@ -377,16 +367,10 @@ def eval(args,model,dataloader,set_name,device,num_examples):
             predictions += prediction.cpu().numpy().tolist()
     return correct_count/num_examples, predictions
 
-logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                    datefmt = '%m/%d/%Y %H:%M:%S',
-                    level = logging.INFO)
+logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',datefmt = '%m/%d/%Y %H:%M:%S',level = logging.INFO)
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    # %cd /content/drive/Shared drives/aki-lab/experiment/IR_CSQA
-
-
-
     parser = argparse.ArgumentParser()
     # data arguments
     parser.add_argument("--data_dir",type = str,default = "dataset/CSQA")
@@ -421,9 +405,7 @@ if __name__ == "__main__":
     parser.add_argument("--cs_save_mode",type = str,default = "id")
     parser.add_argument("--seed",type = int,default = 1,help = "freeze seed")
     parser.add_argument('--tpu',action = "store_true")
-
-
-    # args = parser.parse_args() 在notebook 里 args 需要初始化为[],外部调用py文件不需要
+    #在notebook 里 args 需要初始化为[],外部调用py文件不需要
     args = parser.parse_args()
     if args.tpu:
         tpu_training(args)
