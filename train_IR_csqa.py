@@ -183,105 +183,105 @@ def select_model(args):
 
     # Prepare optimizer and schedule (linear warmup and decay)
     
-    no_decay = ["bias", "LayerNorm.weight"]
-    optimizer_grouped_parameters = [
-        {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-            "weight_decay": args.weight_decay,
-        },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-    ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-    )
+    # no_decay = ["bias", "LayerNorm.weight"]
+    # optimizer_grouped_parameters = [
+    #     {
+    #         "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+    #         "weight_decay": args.weight_decay,
+    #     },
+    #     {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+    # ]
+    # optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    # scheduler = get_linear_schedule_with_warmup(
+    #     optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+    # )
     
-    if args.fp16:
-        model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+    # if args.fp16:
+    #     model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
 
-    ## Training 
-    model.zero_grad()
-    epochs_trained = 0
-    train_iterator = tqdm(range(epochs_trained, int(args.num_train_epochs)), desc="Epoch")
+    # ## Training 
+    # model.zero_grad()
+    # epochs_trained = 0
+    # train_iterator = tqdm(range(epochs_trained, int(args.num_train_epochs)), desc="Epoch")
     
     
 
-    for epoch in train_iterator:
-        epoch_iterator = tqdm(train_dataloader, desc="Iteration")
-        tr_loss = 0
-        for step, batch in enumerate(epoch_iterator):
-            model.train()
-            batch = tuple(t.to(device) for t in batch)
-            inputs = {
-                "input_ids": batch[0],
-                "attention_mask": batch[1],
-                "token_type_ids": batch[2],
-                "labels": batch[3]
-            }
-            outputs = model(**inputs)
-            # model outputs are always tuple in transformers (see doc)
-            loss = outputs[0]
-            if args.gradient_accumulation_steps > 1:
-                loss = loss / args.gradient_accumulation_steps
-            if args.fp16:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-            tr_loss += loss.item()
-            if (step + 1) % args.gradient_accumulation_steps == 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                if args.tpu:
-                    xm.optimizer_step(optimizer)
-                else:
-                    optimizer.step()
-                scheduler.step() 
-                model.zero_grad()
-            # check average training loss
-            if (step + 1)% args.check_loss_step == 0:
-                avg_loss = (tr_loss/(step+1)) * args.gradient_accumulation_steps
-                logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
-        # Eval : one time one epoch
-        acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
-        # result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
-        logger.info("Accuracy : {} on epoch {}".format(acc,epoch))
-        if args.save_method == "Best_Current":
-            if acc > status['best_Acc']:
-                status['best_Acc'] = acc.cpu().numpy().tolist()
-                status['best_epoch'] = epoch
-                model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-                best_model_dir = os.path.join(output_dir,"best_model")
-                # output_dir = os.path.join(output_dir, 'checkpoint-{}'.format(epoch + 1))
-                if not os.path.exists(best_model_dir):
-                    os.makedirs(best_model_dir)
-                model_to_save.save_pretrained(best_model_dir)
-                logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
-                prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-                # with open(prediction_file,'w',encoding= 'utf8') as f:
-                #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
-            # save model 
-            model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
-            current_model_dir = os.path.join(output_dir,"current_model")
-            if not os.path.exists(current_model_dir):
-                os.makedirs(current_model_dir)
-            model_to_save.save_pretrained(current_model_dir)
-            logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
-            #save predictions
-            # prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-            # with open(prediction_file,'w',encoding= 'utf8') as f:
-            #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
-        else:
-            # save model of every epoch
-            model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
-            output_dir = os.path.join(args.output_dir,args.save_model_name)
-            current_model_dir = os.path.join(output_dir,"check_point_{}".format(str(epoch)))
-            if not os.path.exists(current_model_dir):
-                os.makedirs(current_model_dir)
-            model_to_save.save_pretrained(current_model_dir)
-            logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
-        # save status
-        status_dir = os.path.join(output_dir,"status.json")
-        json.dump(status,open(status_dir,'w',encoding = 'utf8'))
+    # for epoch in train_iterator:
+    #     epoch_iterator = tqdm(train_dataloader, desc="Iteration")
+    #     tr_loss = 0
+    #     for step, batch in enumerate(epoch_iterator):
+    #         model.train()
+    #         batch = tuple(t.to(device) for t in batch)
+    #         inputs = {
+    #             "input_ids": batch[0],
+    #             "attention_mask": batch[1],
+    #             "token_type_ids": batch[2],
+    #             "labels": batch[3]
+    #         }
+    #         outputs = model(**inputs)
+    #         # model outputs are always tuple in transformers (see doc)
+    #         loss = outputs[0]
+    #         if args.gradient_accumulation_steps > 1:
+    #             loss = loss / args.gradient_accumulation_steps
+    #         if args.fp16:
+    #             with amp.scale_loss(loss, optimizer) as scaled_loss:
+    #                 scaled_loss.backward()
+    #         else:
+    #             loss.backward()
+    #         tr_loss += loss.item()
+    #         if (step + 1) % args.gradient_accumulation_steps == 0:
+    #             torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+    #             if args.tpu:
+    #                 xm.optimizer_step(optimizer)
+    #             else:
+    #                 optimizer.step()
+    #             scheduler.step() 
+    #             model.zero_grad()
+    #         # check average training loss
+    #         if (step + 1)% args.check_loss_step == 0:
+    #             avg_loss = (tr_loss/(step+1)) * args.gradient_accumulation_steps
+    #             logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
+    #     # Eval : one time one epoch
+    #     acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
+    #     # result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
+    #     logger.info("Accuracy : {} on epoch {}".format(acc,epoch))
+    #     if args.save_method == "Best_Current":
+    #         if acc > status['best_Acc']:
+    #             status['best_Acc'] = acc.cpu().numpy().tolist()
+    #             status['best_epoch'] = epoch
+    #             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+    #             best_model_dir = os.path.join(output_dir,"best_model")
+    #             # output_dir = os.path.join(output_dir, 'checkpoint-{}'.format(epoch + 1))
+    #             if not os.path.exists(best_model_dir):
+    #                 os.makedirs(best_model_dir)
+    #             model_to_save.save_pretrained(best_model_dir)
+    #             logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
+    #             prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+    #             # with open(prediction_file,'w',encoding= 'utf8') as f:
+    #             #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
+    #         # save model 
+    #         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
+    #         current_model_dir = os.path.join(output_dir,"current_model")
+    #         if not os.path.exists(current_model_dir):
+    #             os.makedirs(current_model_dir)
+    #         model_to_save.save_pretrained(current_model_dir)
+    #         logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
+    #         #save predictions
+    #         # prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+    #         # with open(prediction_file,'w',encoding= 'utf8') as f:
+    #         #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
+    #     else:
+    #         # save model of every epoch
+    #         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
+    #         output_dir = os.path.join(args.output_dir,args.save_model_name)
+    #         current_model_dir = os.path.join(output_dir,"check_point_{}".format(str(epoch)))
+    #         if not os.path.exists(current_model_dir):
+    #             os.makedirs(current_model_dir)
+    #         model_to_save.save_pretrained(current_model_dir)
+    #         logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
+    #     # save status
+    #     status_dir = os.path.join(output_dir,"status.json")
+    #     json.dump(status,open(status_dir,'w',encoding = 'utf8'))
 
 # for xla mutithread method, seems to be easier to use
 def train(args):
@@ -295,7 +295,7 @@ def train(args):
     # save all the args
     arg_dict = args.__dict__
     with open(os.path.join(output_dir,"args.json"),'w',encoding='utf8') as f:
-        json.dump(arg_dict,f,indent=2,ensure_ascii=False)\
+        json.dump(arg_dict,f,indent=2,ensure_ascii=False)
     # setup logging
     logfilename = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())+" "+args.save_model_name+".log.txt"
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
@@ -321,7 +321,7 @@ def train(args):
         import torch_xla.utils.utils as xu
         import torch_xla.core.xla_model as xm
         import torch_xla.test.test_utils as test_utils
-
+        # use multi thread method
         devices = (xm.get_xla_supported_devices(max_devices = 8))
         args.learning_rate = args.learning_rate * max(len(devices), 1)
         
@@ -346,6 +346,7 @@ def train(args):
             dev_dataset, 
             sampler = dev_sampler, 
             batch_size = args.eval_batch_size)
+
     t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
     
     def train_loop_fn(model,loader,device,context):
@@ -422,25 +423,56 @@ def train(args):
                 correct_count += (prediction == inputs["labels"]).sum().float()
                 predictions += prediction.cpu().numpy().tolist()
         return correct_count,predictions
-
+    def init_status():
+        ''' 
+        set up status for convenient viewing training result
+        '''
+        return {
+            "current_epoch" : 0,
+            "best_epoch" : -1,
+            "best_Acc" : 0.0
+        }
+    
+    status = init_status()
     model = select_model(args)
-    model_parallel = dp.DataParallel(model, device_ids=devices)
-    # pdb.set_trace()
-    logger.info("model is Parallel now")
+    if args.tpu:
+        model_parallel = dp.DataParallel(model, device_ids=devices)
+    else:
+        model = model.to(device)
+
     for epoch in tqdm(range(0,args.num_train_epochs),desc = "Epoch"):
-        model_parallel(train_loop_fn, train_dataloader)
-        results = model_parallel(test_loop_fn, dev_dataloader)
+        if args.tpu:
+            model_parallel(train_loop_fn, train_dataloader)
+            results = model_parallel(test_loop_fn, dev_dataloader)
+            correct_count = sum([float(item[0]) for item in results])
+            predictions = [i for item in results for i in item[1]]
+        else:
+            train_loop_fn(model,train_dataloader,device,None)
+            correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
         pdb.set_trace()
-        correct_count = sum([float(item[0]) for item in results])
-        predictions = [i for item in results for i in item[1]]
+        
         acc = correct_count / len(dev_examples)
         model = model_parallel.models[0]
-        model.save_pretrained()
-        # save model
-        logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch + 1)))
-
-
-
+        # save model, save status 
+        logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
+        if args.save_method == "Best_Current":
+            if acc > status["best_Acc"]:
+                status['best_Acc'] = acc
+                status['best_epoch'] = epoch
+                model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
+                best_model_dir = os.path.join(output_dir,"best_model")
+                if not os.path.exists(best_model_dir):
+                    os.makedirs(best_model_dir)
+                model_to_save.save_pretrained(best_model_dir)
+                logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
+            model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
+            current_model_dir = os.path.join(output_dir,"current_model")
+            if not os.path.exists(current_model_dir):
+                os.makedirs(current_model_dir)
+            model_to_save.save_pretrained(current_model_dir)
+            logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
+        status_dir = os.path.join(output_dir,"status.json")
+        json.dump(status,open(status_dir,'w',encoding = 'utf8'))
 
 
 def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
