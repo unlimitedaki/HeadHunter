@@ -367,8 +367,8 @@ def train(args):
 
         model.zero_grad()
         tr_loss = 0.0
-        # for step,batch in tqdm(enumerate(loader)):
-        for step,batch in enumerate(loader):
+        for step,batch in tqdm(enumerate(loader),total = t_total/xm.xrt_world_size()):
+        # for step,batch in enumerate(loader):
 
             model.train()
             batch = tuple(t.to(device) for t in batch)
@@ -449,7 +449,6 @@ def train(args):
         else:
             train_loop_fn(model,train_dataloader,device,None)
             correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
-        pdb.set_trace()
         
         acc = correct_count / len(dev_examples)
         model = model_parallel.models[0]
