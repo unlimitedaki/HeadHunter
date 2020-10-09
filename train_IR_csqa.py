@@ -77,14 +77,17 @@ def select_tokenizer(args):
 
 def select_model(args):
     cache = os.path.join(args.output_dir,"cache")
-    if "albert" in args.origin_model:
-        return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
-    elif "roberta" in args.origin_model:
-        return RobertaForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
-    elif "bert" in args.origin_model:
-        return BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
-    elif "xlnet" in args.origin_model:
-        return XLNetForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+    if args.task_name == "rerank_csqa":
+        return None
+    else:
+        if "albert" in args.origin_model:
+            return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        elif "roberta" in args.origin_model:
+            return RobertaForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        elif "bert" in args.origin_model:
+            return BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        elif "xlnet" in args.origin_model:
+            return XLNetForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
         
 
 
@@ -346,11 +349,20 @@ def train(args):
             dev_dataset, 
             sampler = dev_sampler, 
             batch_size = args.eval_batch_size)
+    else:
+        # else we use gpu, colab only provide one gpu, so we won't use distributed trainging
+        device = torch.device('cuda:0')
+        train_sampler = RandomSampler(train_dataset) 
+        train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
 
-    t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
+        dev_sampler = SequentialSampler(dev_dataset) 
+        dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
+        
+    train_step = len(train_dataloader)
+    t_total = train_step // args.gradient_accumulation_steps * args.num_train_epochs
     
     def train_loop_fn(model,loader,device,context):
-        nonlocal t_total
+        nonlocal t_total,train_step
         # t_total = len(loader) * args.num_train_epochs
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
@@ -365,9 +377,13 @@ def train(args):
             optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
         )
 
+        if not args.tpu and args.fp16:
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+
         model.zero_grad()
         tr_loss = 0.0
-        for step,batch in tqdm(enumerate(loader),total = t_total/xm.xrt_world_size()):
+        device_num = xm.xrt_world_size() if args.tpu else 1
+        for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
         # for step,batch in enumerate(loader):
 
             model.train()
@@ -423,6 +439,7 @@ def train(args):
                 correct_count += (prediction == inputs["labels"]).sum().float()
                 predictions += prediction.cpu().numpy().tolist()
         return correct_count,predictions
+
     def init_status():
         ''' 
         set up status for convenient viewing training result
@@ -438,6 +455,7 @@ def train(args):
     if args.tpu:
         model_parallel = dp.DataParallel(model, device_ids=devices)
     else:
+        device = torch.device('cuda:0')
         model = model.to(device)
 
     for epoch in tqdm(range(0,args.num_train_epochs),desc = "Epoch"):
@@ -563,6 +581,7 @@ if __name__ == "__main__":
     parser.add_argument("--cs_save_mode",type = str,default = "id")
     parser.add_argument("--seed",type = int,default = 1,help = "freeze seed")
     parser.add_argument('--tpu',action = "store_true")
+    parser.add_argument('--task_name',type = str, default = "baseline")
     #在notebook 里 args 需要初始化为[],外部调用py文件不需要
     args = parser.parse_args()
     # if args.tpu:
