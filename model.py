@@ -67,7 +67,7 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
-        self.bert = AlbertModel(config)
+        self.albert = AlbertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, 1)
 
@@ -82,9 +82,11 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
-        output_attentions=False,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
     ):
-        
+        # return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
         input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
@@ -96,27 +98,27 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
             if inputs_embeds is not None
             else None
         )
-
-        outputs = self.bert(
+        outputs = self.albert(
             input_ids,
             attention_mask=attention_mask,
-            token_type_ids=token_type_ids
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds
         )
-
         pooled_output = outputs[1]
 
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
 
-        outputs = (reshaped_logits,) + outputs[2:]  # add hidden states and attention if they are here
-
+        loss = None
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(reshaped_logits, labels)
-            outputs = (loss,) + outputs
+        output = (reshaped_logits,) + outputs[2:]
+        return ((loss,) + output) if loss is not None else output
 
-        return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
 class RobertaForMultipleChoice(BertPreTrainedModel):
     # config_class = RobertaConfig
