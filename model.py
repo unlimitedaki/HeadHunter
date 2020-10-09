@@ -311,14 +311,17 @@ class AlbertAttRanker(AlbertPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
         self.cs_len = cs_len
-        self.bert = AlbertModel(config)
+        self.albert = AlbertModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.self_att = SelfAttention(config)
-        # self.classifier = nn.Linear(config.hidden_size,1)
         self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
 
-    def forward(self,
+        self.init_weights()
+
+    def forward(
+        self,
         input_ids=None,
         attention_mask=None,
         token_type_ids=None,
@@ -326,10 +329,14 @@ class AlbertAttRanker(AlbertPreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
-        output_attentions=False,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
     ):
         batch_size,input_size = input_ids.shape[:2]
         num_choices = int(input_size/self.cs_len)
+        # num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
+
         input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
         attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
         token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
@@ -339,19 +346,20 @@ class AlbertAttRanker(AlbertPreTrainedModel):
             if inputs_embeds is not None
             else None
         )
-
-        bert_outputs = self.bert(
+        outputs = self.albert(
             input_ids,
             attention_mask=attention_mask,
-            token_type_ids=token_type_ids
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds
         )
-
-        pooled_output = bert_outputs[1]
+        pooled_output = outputs[1]
+        pooled_output = self.dropout(pooled_output)
         
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
 
         atten_output = self.self_att(reshaped_output)
-
 
         reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
         logits = self.classifier(reshaped_output)
