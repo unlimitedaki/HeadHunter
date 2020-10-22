@@ -78,7 +78,14 @@ def select_tokenizer(args):
 def select_model(args):
     cache = os.path.join(args.output_dir,"cache")
     if args.task_name == "rerank_csqa":
-        return None
+        if "albert" in args.origin_model:
+            return AlbertAttRanker.from_pretrained(args.origin_model,cache_dir = cache)
+        elif "roberta" in args.origin_model:
+            return RobertaAttRanker.from_pretrained(args.origin_model,cache_dir = cache)
+        elif "bert" in args.origin_model:
+            return BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache)
+        elif "xlnet" in args.origin_model:
+            return XLNetAttRanker.from_pretrained(args.origin_model,cache_dir = cache)
     else:
         if "albert" in args.origin_model:
             return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
@@ -90,201 +97,6 @@ def select_model(args):
             return XLNetForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
         
 
-
-# def train(index,args,model,train_dataset,dev_examples,dev_dataset,logger,omcs_corpus,output_dir):
-#     # setup output dir for model and log
-#     if not args.tpu:
-#         output_dir = os.path.join(args.output_dir,args.save_model_name)
-#         if not os.path.exists(output_dir):
-#             os.makedirs(output_dir)
-
-#         arg_dict = args.__dict__
-#         with open(os.path.join(output_dir,"args.json"),'w',encoding='utf8') as f:
-#             json.dump(arg_dict,f,indent=2,ensure_ascii=False)
-            
-#         # setup logging
-#         logfilename = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())+" "+args.save_model_name+".log.txt"
-#         fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
-#         fh.setLevel(logging.INFO)
-#         logger.addHandler(fh)
-
-#         # setup seed
-#         np.random.seed(args.seed)
-#         torch.manual_seed(args.seed)
-#         if torch.cuda.is_available():
-#             torch.cuda.manual_seed_all(args.seed)
-
-#         tokenizer = select_tokenizer(args)
-
-#         # load data
-#         omcs_corpus = load_omcs(args)
-#         if args.cs_len > 0:
-#             # omcs_corpus = None
-            
-#             _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
-#             dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
-#             # _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
-
-#         else:
-#             _,_,train_dataset= load_csqa_dataset(tokenizer,args,"train")
-#             dev_examples,_,dev_dataset= load_csqa_dataset(tokenizer,args,"dev")
-#             # _,_,test_dataset= load_csqa_dataset(tokenizer,args,"test",is_training = False)
-#     if args.tpu:
-#         # use tpu
-#         import torch_xla
-#         import torch_xla.core.xla_model as xm
-#         import torch_xla.distributed.parallel_loader as pl
-#         device = xm.xla_device()
-        
-#         train_sampler = DistributedSampler(
-#             train_dataset,
-#             num_replicas=xm.xrt_world_size(),
-#             rank=xm.get_ordinal(),
-#             shuffle=True)
-#         dev_sampler = DistributedSampler(
-#             dev_dataset,
-#             num_replicas=xm.xrt_world_size(),
-#             rank=xm.get_ordinal(),
-#             shuffle=False)
-#         train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
-#         train_size = len(train_dataloader)
-#         # print("paralle size {}".format(str()))
-#         t_total = train_size // args.gradient_accumulation_steps * args.num_train_epochs
-#         dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
-#         train_dataloader = pl.ParallelLoader(train_dataloader, [device]).per_device_loader(device)
-#         dev_dataloader = pl.ParallelLoader(dev_dataloader, [device]).per_device_loader(device)
-#         print("Process", index ,"is using", xm.xla_real_devices([str(device)])[0])
-#     else:
-#         device = torch.device('cuda:0')
-
-#         train_sampler = RandomSampler(train_dataset) 
-#         train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
-#         t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
-#         dev_sampler = SequentialSampler(dev_dataset) 
-#         dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
-
-#     # test_sampler = SequentialSampler(test_dataset) 
-#     # test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=args.eval_batch_size)
-
-#     # load model
-#         if args.do_finetune:
-#             status_dir = os.path.join(output_dir,"status.json")
-#             status = json.load(open(status_dir,'r'))
-#             current_model = os.path.join(output_dir, "current_model")
-#             model = BertForQuestionAnsweringWithMaskedLM.from_pretrained(current_model)
-            
-#         else:
-#             cache = os.path.join(args.output_dir,"cache")
-#             # model = BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
-#             model = select_model(args)
-#     status = {}
-#     status['best_epoch'] = 0
-#     status['best_Acc'] = 0.0
-#     status['current_epoch']  = 0
-            
-#     model = model.to(device)
-
-    # Prepare optimizer and schedule (linear warmup and decay)
-    
-    # no_decay = ["bias", "LayerNorm.weight"]
-    # optimizer_grouped_parameters = [
-    #     {
-    #         "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-    #         "weight_decay": args.weight_decay,
-    #     },
-    #     {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-    # ]
-    # optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    # scheduler = get_linear_schedule_with_warmup(
-    #     optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-    # )
-    
-    # if args.fp16:
-    #     model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
-
-    # ## Training 
-    # model.zero_grad()
-    # epochs_trained = 0
-    # train_iterator = tqdm(range(epochs_trained, int(args.num_train_epochs)), desc="Epoch")
-    
-    
-
-    # for epoch in train_iterator:
-    #     epoch_iterator = tqdm(train_dataloader, desc="Iteration")
-    #     tr_loss = 0
-    #     for step, batch in enumerate(epoch_iterator):
-    #         model.train()
-    #         batch = tuple(t.to(device) for t in batch)
-    #         inputs = {
-    #             "input_ids": batch[0],
-    #             "attention_mask": batch[1],
-    #             "token_type_ids": batch[2],
-    #             "labels": batch[3]
-    #         }
-    #         outputs = model(**inputs)
-    #         # model outputs are always tuple in transformers (see doc)
-    #         loss = outputs[0]
-    #         if args.gradient_accumulation_steps > 1:
-    #             loss = loss / args.gradient_accumulation_steps
-    #         if args.fp16:
-    #             with amp.scale_loss(loss, optimizer) as scaled_loss:
-    #                 scaled_loss.backward()
-    #         else:
-    #             loss.backward()
-    #         tr_loss += loss.item()
-    #         if (step + 1) % args.gradient_accumulation_steps == 0:
-    #             torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-    #             if args.tpu:
-    #                 xm.optimizer_step(optimizer)
-    #             else:
-    #                 optimizer.step()
-    #             scheduler.step() 
-    #             model.zero_grad()
-    #         # check average training loss
-    #         if (step + 1)% args.check_loss_step == 0:
-    #             avg_loss = (tr_loss/(step+1)) * args.gradient_accumulation_steps
-    #             logger.info("\t average_step_loss=%s @ step = %s on epoch = %s",str(avg_loss),str(step+1),str(epoch+1))
-    #     # Eval : one time one epoch
-    #     acc,predictions = eval(args,model,dev_dataloader,"dev",device,len(dev_dataset))
-    #     # result_json = make_predictions(args,dev_examples,predictions,omcs_corpus)
-    #     logger.info("Accuracy : {} on epoch {}".format(acc,epoch))
-    #     if args.save_method == "Best_Current":
-    #         if acc > status['best_Acc']:
-    #             status['best_Acc'] = acc.cpu().numpy().tolist()
-    #             status['best_epoch'] = epoch
-    #             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-    #             best_model_dir = os.path.join(output_dir,"best_model")
-    #             # output_dir = os.path.join(output_dir, 'checkpoint-{}'.format(epoch + 1))
-    #             if not os.path.exists(best_model_dir):
-    #                 os.makedirs(best_model_dir)
-    #             model_to_save.save_pretrained(best_model_dir)
-    #             logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
-    #             prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-    #             # with open(prediction_file,'w',encoding= 'utf8') as f:
-    #             #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
-    #         # save model 
-    #         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
-    #         current_model_dir = os.path.join(output_dir,"current_model")
-    #         if not os.path.exists(current_model_dir):
-    #             os.makedirs(current_model_dir)
-    #         model_to_save.save_pretrained(current_model_dir)
-    #         logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
-    #         #save predictions
-    #         # prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
-    #         # with open(prediction_file,'w',encoding= 'utf8') as f:
-    #         #     json.dump(result_json,f,indent = 2,ensure_ascii = False)
-    #     else:
-    #         # save model of every epoch
-    #         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
-    #         output_dir = os.path.join(args.output_dir,args.save_model_name)
-    #         current_model_dir = os.path.join(output_dir,"check_point_{}".format(str(epoch)))
-    #         if not os.path.exists(current_model_dir):
-    #             os.makedirs(current_model_dir)
-    #         model_to_save.save_pretrained(current_model_dir)
-    #         logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
-    #     # save status
-    #     status_dir = os.path.join(output_dir,"status.json")
-    #     json.dump(status,open(status_dir,'w',encoding = 'utf8'))
 
 # for xla mutithread method, seems to be easier to use
 def train(args):
@@ -307,14 +119,9 @@ def train(args):
     # loading data
     omcs_corpus = load_omcs(args)
     tokenizer = select_tokenizer(args)
-    if args.cs_len > 0:
-        _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
-        dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
-        # _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
-    else:
-        _,_,train_dataset= load_csqa_dataset(tokenizer,args,"train")
-        dev_examples,_,dev_dataset= load_csqa_dataset(tokenizer,args,"dev")
-
+    _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
+    dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
+    # _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
     # setup device
     if args.tpu:
         # xla packages
@@ -496,9 +303,7 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
   cs_file = "OMCS/{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
   with open(cs_file,'r',encoding="utf8") as f:
       cs_data = json.load(f)
-  # put result into examples
-  
-  pred_index = 0 #because it's sequential, we can just index it with examples
+  pred_index = 0 #because it's sequential, we simply index it with examples
   result_json = {}
   for example in tqdm(examples,desc="puting result into examples"):
       result_json[example.id] = {}
@@ -518,13 +323,12 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
   return result_json
 
 def eval(args,model,dataloader,set_name,device,num_examples):
-    # pdb.set_trace()
     torch.cuda.empty_cache()
     logger.info("Evaluate on {}".format(set_name))
     iterator = tqdm(dataloader, desc="Iteration")
     correct_count = 0
     predictions = []
-    # total = 0
+
     with torch.no_grad():
         for step,batch in enumerate(iterator):
             model.eval()
