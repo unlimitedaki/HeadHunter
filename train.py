@@ -6,7 +6,7 @@ import torch
 import transformers
 import json
 from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 import logging
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset, DistributedSampler
 import argparse
@@ -79,13 +79,13 @@ def select_model(args):
     cache = os.path.join(args.output_dir,"cache")
     if args.task_name == "rerank_csqa":
         if "albert" in args.origin_model:
-            return AlbertAttRanker.from_pretrained(args.origin_model,cache_dir = cache)
+            return AlbertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
         elif "roberta" in args.origin_model:
-            return RobertaAttRanker.from_pretrained(args.origin_model,cache_dir = cache)
+            return RobertaAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
         elif "bert" in args.origin_model:
-            return BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache)
+            return BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
         elif "xlnet" in args.origin_model:
-            return XLNetAttRanker.from_pretrained(args.origin_model,cache_dir = cache)
+            return XLNetAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
     else:
         if "albert" in args.origin_model:
             return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
@@ -265,18 +265,20 @@ def train(args):
         device = torch.device('cuda:0')
         model = model.to(device)
 
-    for epoch in tqdm(range(0,args.num_train_epochs),desc = "Epoch"):
+    for epoch in range(0,args.num_train_epochs):
+        logger.info("Epoch: {}".format(str(epoch)))
         if args.tpu:
             model_parallel(train_loop_fn, train_dataloader)
             results = model_parallel(test_loop_fn, dev_dataloader)
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
+            model = model_parallel.models[0]
         else:
             train_loop_fn(model,train_dataloader,device,None)
             correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
-        
+        # pdb.set_trace()
         acc = correct_count / len(dev_examples)
-        model = model_parallel.models[0]
+        acc = acc.cpu().item()
         # save model, save status 
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         if args.save_method == "Best_Current":

@@ -136,7 +136,7 @@ class CSQAProcessor():
                     sen2 = tokenizer.tokenize(ending)
                 else:
                     sen1 = self.join_cs(tokenizer,example.context[ending_index],example.question)
-                    sen1 = tokenizer.tokenize(sen1)
+                    # sen1 = tokenizer.tokenize(sen1)
                     sen2 = tokenizer.tokenize(ending)
                 inputs = tokenizer.encode_plus(
                     sen1,
@@ -172,10 +172,10 @@ class CSQAProcessor():
 class CSQARankerProcessor(CSQAProcessor):
     '''
     Processor for attentive reranker,
-    while one example inputed, it will be num_choices * num_commmonsense(cslen) inputs for encoding.
+    while one example inputed, it will be num_choices * num_commmonsense(cs_len) inputs for encoding.
     '''
     def __init__(self):
-        super.__init__()
+        super().__init__()
     #  convert csqa examples(MultipleChoiceExamples) to InputFeatures
     def convert_examples_to_features(self, tokenizer,examples, max_seq_length, is_training):
         """Loads a data file into a list of `InputBatch`s."""
@@ -253,12 +253,12 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     else :
         file_name = os.path.join(args.data_dir,args.train_file)
 
-    if args.task_mode == "rerank_csqa":
+    if args.task_name == "rerank_csqa":
         processor = CSQARankerProcessor()
         max_length = args.max_length + 12
     else:
         processor = CSQAProcessor()
-        max_length = args.max_length + 12 * args.cslen
+        max_length = args.max_length + 12 * args.cs_len
 
     examples = processor.read_examples(file_name,is_training)
 
@@ -266,7 +266,8 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     cs_result_path = os.path.join(args.cs_dir,cs_result_file)
     with open(cs_result_path,'r',encoding='utf8') as f:
         cs_data = json.load(f)
-    examples = put_in_cs(examples,cs_data,omcs_corpus,args.cs_len)
+    if args.cs_len > 0:
+      examples = put_in_cs(examples,cs_data,omcs_corpus,args.cs_len)
 
     features = processor.convert_examples_to_features(tokenizer,examples,max_length,is_training)
     
