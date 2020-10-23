@@ -190,8 +190,8 @@ def train(args):
 
         model.zero_grad()
         tr_loss = 0.0
-        for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
-        # for step,batch in enumerate(loader):
+        # for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
+        for step,batch in enumerate(loader):
 
             model.train()
             batch = tuple(t.to(device) for t in batch)
@@ -230,6 +230,7 @@ def train(args):
         # logger.info("Evaluate on {}".format(set_name))
         correct_count = 0
         predictions = []
+        total_test_items = 0
         with torch.no_grad():
             for step,batch in enumerate(loader):
                 model.eval()
@@ -245,6 +246,8 @@ def train(args):
                 prediction = torch.argmax(logits,axis = 1)
                 correct_count += (prediction == inputs["labels"]).sum().float()
                 predictions += prediction.cpu().numpy().tolist()
+                total_test_items += batch[0].shape[0]
+        logger.info("test_items of device[{}] is {}".format(device,str(total_test_items)))
         return correct_count,predictions
 
     def init_status():
@@ -279,7 +282,7 @@ def train(args):
             correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
-        
+        pdb.set_trace()
         # save model, save status 
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         if args.save_method == "Best_Current":
