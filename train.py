@@ -134,7 +134,8 @@ def train(args):
         # use multi thread method
         devices = (xm.get_xla_supported_devices(max_devices = 8))
         args.learning_rate = args.learning_rate * max(len(devices), 1)
-        
+        logger.info("New learning_rate for TPU is {}".format(str(args.learning_rate)))
+        device_num = len(devices)
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset,
             num_replicas = xm.xrt_world_size(),
@@ -164,12 +165,12 @@ def train(args):
 
         dev_sampler = SequentialSampler(dev_dataset) 
         dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
+        device_num = 1
         
     train_step = len(train_dataloader)
-    t_total = train_step // args.gradient_accumulation_steps * args.num_train_epochs
-    
+    t_total = train_step // args.gradient_accumulation_steps * args.num_train_epochs // device_num
     def train_loop_fn(model,loader,device,context):
-        nonlocal t_total,train_step
+        nonlocal t_total,train_step,device_num 
         # t_total = len(loader) * args.num_train_epochs
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
@@ -189,7 +190,6 @@ def train(args):
 
         model.zero_grad()
         tr_loss = 0.0
-        device_num = xm.xrt_world_size() if args.tpu else 1
         for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
         # for step,batch in enumerate(loader):
 
@@ -273,12 +273,13 @@ def train(args):
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
             model = model_parallel.models[0]
+            acc = correct_count / len(dev_examples)
         else:
             train_loop_fn(model,train_dataloader,device,None)
             correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
-        # pdb.set_trace()
-        acc = correct_count / len(dev_examples)
-        acc = acc.cpu().item()
+            acc = correct_count / len(dev_examples)
+            acc = acc.cpu().item() # tpu result don't need to switch device 
+        
         # save model, save status 
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         if args.save_method == "Best_Current":
