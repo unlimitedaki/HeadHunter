@@ -190,8 +190,8 @@ def train(args):
 
         model.zero_grad()
         tr_loss = 0.0
-        # for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
-        for step,batch in enumerate(loader):
+        for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
+        # for step,batch in enumerate(loader):
 
             model.train()
             batch = tuple(t.to(device) for t in batch)
