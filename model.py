@@ -252,6 +252,26 @@ class SelfAttention(nn.Module):
         context_layer = torch.matmul(attention_probs, value_layer)
         return context_layer
 
+class SummaryAttentionLayer(nn.Module):
+    '''
+    this layer summaries representation of all commonsenses,
+    and outputs their attention score
+    seems to be a good idea!
+    '''
+    def __init__(self,hidden_size):
+        super().__init__()
+        self.w = nn.Parameter(torch.FloatTensor(1,hidden_size))
+
+    def forward(self,x):
+        x = F.tanh(x)
+        x_t = torch.transpose(x,-2,-1)
+        pdb.set_trace()
+        inter_attens = F.softmax(torch.matmul(self.w,x_t),dim=-1)
+        output = F.tanh(torch.matmul(inter_attens,x))
+        output = output.squeeze(-2)
+        return output
+
+
 class BertAttRanker(BertPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
@@ -313,7 +333,8 @@ class BertAttRankerPRA(BertPreTrainedModel):
         self.cs_len = cs_len
         self.bert = BertModel(config)
         self.self_att = SelfAttention(config)
-        self.BiLSTM = nn.LSTM(input_size = config.hidden_size,hidden_size = config.hidden_size,bidirectional = True)
+        # self.BiLSTM = nn.LSTM(input_size = config.hidden_size,hidden_size = config.hidden_size,bidirectional = True)
+        self.summary = SummaryAttentionLayer(config.hidden_size)
         self.classifier = nn.Linear(config.hidden_size*2,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
@@ -351,7 +372,8 @@ class BertAttRankerPRA(BertPreTrainedModel):
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
         atten_output = self.self_att(reshaped_output)
         # reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
-        reshaped_output = self.BiLSTM(atten_output)[1][0]
+        # reshaped_output = self.BiLSTM(atten_output)[1][0]
+        reshaped_output = self.summary(atten_output)
         pdb.set_trace()
         logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
