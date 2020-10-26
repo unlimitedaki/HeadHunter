@@ -392,7 +392,7 @@ class BertAttRankerDontRank(BertPreTrainedModel):
         super().__init__(config)
         self.cs_len = cs_len
         self.bert = BertModel(config)
-        # self.self_att = SelfAttention(config) don't atten
+        # self.self_att = SelfAttention(config) don't rerank
         # self.classifier = nn.Linear(config.hidden_size,1)
         self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)

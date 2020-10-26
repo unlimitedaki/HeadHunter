@@ -285,7 +285,7 @@ def train(args):
             correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
-        pdb.set_trace()
+        # pdb.set_trace()
         # save model, save status 
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         if args.save_method == "Best_Current":
