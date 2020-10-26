@@ -429,7 +429,7 @@ class BertAttRankerDontRank(BertPreTrainedModel):
         pooled_output = bert_outputs[1] # (bz*num_choice*cslen,hz)
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
         # atten_output = self.self_att(reshaped_output)
-        reshaped_output = reshaped_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
+        reshaped_output = reshaped_output.view(int(batch_size*num_choices),self.cs_len*pooled_output.size(-1))
         logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
 
