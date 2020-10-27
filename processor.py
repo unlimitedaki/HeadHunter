@@ -255,6 +255,7 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     cache_dir = os.path.join(args.output_dir,"feature_cache")
     cache_name = "cached_{}_{}_{}_{}".format(data_type,args.cs_mode,args.task_name,args.cs_len)
     cache_path = os.path.join(cache_dir,cache_name)
+    print(cache_path)
     # if not os.path.exists(cache_path):
         
     if "rerank_csqa" in args.task_name:

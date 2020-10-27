@@ -172,28 +172,35 @@ def train(args):
         
     train_step = len(train_dataloader)
     t_total = train_step // args.gradient_accumulation_steps * args.num_train_epochs // device_num
+    optimizer = None
+    scheduler = None
     def train_loop_fn(model,loader,device,context):
         nonlocal t_total,train_step,device_num 
         # t_total = len(loader) * args.num_train_epochs
-        no_decay = ["bias", "LayerNorm.weight"]
-        optimizer_grouped_parameters = [
-            {
-                "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": args.weight_decay,
-            },
-            {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-        ]
-        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-        scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-        )
-
-        if not args.tpu and args.fp16:
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+        if not args.tpu :
+            nonlocal optimizer, scheduler
+            # don't need to init optimizer every epoch if not using tpu
+            if not optimizer:
+                no_decay = ["bias", "LayerNorm.weight"]
+                optimizer_grouped_parameters = [
+                    {
+                        "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                        "weight_decay": args.weight_decay,
+                    },
+                    {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+                ]
+                optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+                scheduler = get_linear_schedule_with_warmup(
+                    optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+                )
+                if args.fp16:
+                    model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
 
         model.zero_grad()
         tr_loss = 0.0
-        for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
+        iterator = tqdm(enumerate(loader),total = train_step/device_num)
+        # iterator = enumerate(loader)
+        for step,batch in iterator:
         # for step,batch in enumerate(loader):
 
             model.train()
@@ -235,6 +242,7 @@ def train(args):
         predictions = []
         total_test_items = 0
         with torch.no_grad():
+            iterator = tqdm(enumerate(loader))
             for step,batch in enumerate(loader):
                 model.eval()
                 batch = tuple(t.to(device) for t in batch)
@@ -285,7 +293,6 @@ def train(args):
             correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
-        # pdb.set_trace()
         # save model, save status 
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         if args.save_method == "Best_Current":
