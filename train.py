@@ -245,7 +245,7 @@ def train(args):
     def test_loop_fn(model,loader,device,context):
         model.eval()
         torch.cuda.empty_cache()
-        logger.info("Evaluate on {}".format(set_name))
+        # logger.info("Evaluate on {}".format(set_name))
         correct_count = 0
         predictions = []
         total_test_items = 0
