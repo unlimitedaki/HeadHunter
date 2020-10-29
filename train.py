@@ -19,6 +19,7 @@ import numpy as np
 from processor import *
 from model import *
 from apex import amp
+import random
 
 
 
@@ -99,7 +100,13 @@ def select_model(args):
         elif "xlnet" in args.origin_model:
             return XLNetForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
         
-
+def set_seed(args):
+    logger.info("Freeze seed : {}".format(str(args.seed)))
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.si_available():
+        torch.cuda.manual_seed_all(args.seed)
 
 # for xla mutithread method, seems to be easier to use
 def train(args):
@@ -119,6 +126,9 @@ def train(args):
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
+    # freeze seed
+    if args.seed:
+        set_seed(args)
     # loading data
     omcs_corpus = load_omcs(args)
     tokenizer = select_tokenizer(args)
@@ -201,8 +211,6 @@ def train(args):
         iterator = tqdm(enumerate(loader),total = train_step/device_num)
         # iterator = enumerate(loader)
         for step,batch in iterator:
-        # for step,batch in enumerate(loader):
-
             model.train()
             batch = tuple(t.to(device) for t in batch)
             inputs = {
@@ -237,12 +245,12 @@ def train(args):
     def test_loop_fn(model,loader,device,context):
         model.eval()
         torch.cuda.empty_cache()
-        # logger.info("Evaluate on {}".format(set_name))
+        logger.info("Evaluate on {}".format(set_name))
         correct_count = 0
         predictions = []
         total_test_items = 0
         with torch.no_grad():
-            iterator = tqdm(enumerate(loader))
+            # iterator = tqdm(enumerate(loader))
             for step,batch in enumerate(loader):
                 model.eval()
                 batch = tuple(t.to(device) for t in batch)
@@ -340,7 +348,7 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
 
 def eval(args,model,dataloader,set_name,device,num_examples):
     torch.cuda.empty_cache()
-    logger.info("Evaluate on {}".format(set_name))
+    logger.info("Evaluating on {}".format(set_name))
     iterator = tqdm(dataloader, desc="Iteration")
     correct_count = 0
     predictions = []
@@ -399,7 +407,7 @@ if __name__ == "__main__":
     parser.add_argument("--do_finetune",action = "store_true",default = False)
     parser.add_argument("--cs_mode",type = str,default = "wholeQA-Match")
     parser.add_argument("--cs_save_mode",type = str,default = "id")
-    parser.add_argument("--seed",type = int,default = 1,help = "freeze seed")
+    parser.add_argument("--seed",type = int,default = None,help = "freeze seed")
     parser.add_argument('--tpu',action = "store_true")
     parser.add_argument('--task_name',type = str, default = "baseline")
     #在notebook 里 args 需要初始化为[],外部调用py文件不需要
