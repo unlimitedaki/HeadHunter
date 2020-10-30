@@ -248,6 +248,7 @@ def train(args):
         # logger.info("Evaluate on {}".format(set_name))
         correct_count = 0
         predictions = []
+        attention_scores = []
         total_test_items = 0
         with torch.no_grad():
             # iterator = tqdm(enumerate(loader))
@@ -262,12 +263,14 @@ def train(args):
                 }
                 outputs = model(**inputs)
                 logits = outputs[1]
+                attention_score = outputs[2].cpu().numpy().tolist()
+                attention_scores.append(attention_score)
                 prediction = torch.argmax(logits,axis = 1)
                 correct_count += (prediction == inputs["labels"]).sum().float()
                 predictions += prediction.cpu().numpy().tolist()
                 total_test_items += batch[0].shape[0]
-        logger.info("test_items of device[{}] is {}".format(device,str(total_test_items)))
-        return correct_count,predictions
+        # logger.info("test_items of device[{}] is {}".format(device,str(total_test_items)))
+        return correct_count,predictions,attention_scores
 
     def init_status():
         ''' 
@@ -298,10 +301,11 @@ def train(args):
             acc = correct_count / len(dev_examples)
         else:
             train_loop_fn(model,train_dataloader,device,None)
-            correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
+            correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
         # save model, save status 
+        with open(os.path.join)
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         if args.save_method == "Best_Current":
             if acc > status["best_Acc"]:
@@ -345,6 +349,8 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
           else:
               ending['cs'] = ending["cs"][:args.cs_len]
   return result_json
+
+def test(args.)
 
 def eval(args,model,dataloader,set_name,device,num_examples):
     torch.cuda.empty_cache()

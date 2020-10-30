@@ -247,10 +247,11 @@ class SelfAttention(nn.Module):
         query_layer = self.query(hidden_states)
         key_layer = self.key(hidden_states)
         value_layer = self.value(hidden_states)
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-        attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        attention_probs = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+        attention_probs = nn.Softmax(dim=-1)(attention_probs)
+        attention_scores = torch.sum(attention_probs,dim = -2)
         context_layer = torch.matmul(attention_probs, value_layer)
-        return context_layer
+        return context_layer,attention_scores
 
 class SummaryAttentionLayer(nn.Module):
     '''
@@ -313,7 +314,7 @@ class BertAttRanker(BertPreTrainedModel):
 
         pooled_output = bert_outputs[1]
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
-        atten_output = self.self_att(reshaped_output)
+        atten_output,attention_scores = self.self_att(reshaped_output)
         reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
         logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
