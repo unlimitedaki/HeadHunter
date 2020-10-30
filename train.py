@@ -305,7 +305,7 @@ def train(args):
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
         # save model, save status 
-        with open(os.path.join)
+        
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         if args.save_method == "Best_Current":
             if acc > status["best_Acc"]:
@@ -315,6 +315,12 @@ def train(args):
                 best_model_dir = os.path.join(output_dir,"best_model")
                 if not os.path.exists(best_model_dir):
                     os.makedirs(best_model_dir)
+
+                f_atten = open(os.path.best_model_dir,"prediction.txt")
+                for p,a in zip(predictions,attention_scores):
+                    f_atten.write("{}\t{}".format(str(p),str(a)))
+                f_atten.close()
+
                 model_to_save.save_pretrained(best_model_dir)
                 logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
@@ -350,7 +356,7 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
               ending['cs'] = ending["cs"][:args.cs_len]
   return result_json
 
-def test(args.)
+# def test(args.)
 
 def eval(args,model,dataloader,set_name,device,num_examples):
     torch.cuda.empty_cache()
