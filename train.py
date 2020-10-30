@@ -19,6 +19,7 @@ import numpy as np
 from processor import *
 from model import *
 from apex import amp
+import random
 
 
 
@@ -86,6 +87,9 @@ def select_model(args):
             return BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
         elif "xlnet" in args.origin_model:
             return XLNetAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
+    elif args.task_name == "rerank_csqa_without_rerank":
+        if "bert" in args.origin_model:
+            return BertAttRankerDontRank.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
     else:
         if "albert" in args.origin_model:
             return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
@@ -96,7 +100,13 @@ def select_model(args):
         elif "xlnet" in args.origin_model:
             return XLNetForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
         
-
+def set_seed(args):
+    logger.info("Freeze seed : {}".format(str(args.seed)))
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
 
 # for xla mutithread method, seems to be easier to use
 def train(args):
@@ -116,6 +126,9 @@ def train(args):
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
+    # freeze seed
+    if args.seed:
+        set_seed(args)
     # loading data
     omcs_corpus = load_omcs(args)
     tokenizer = select_tokenizer(args)
@@ -169,30 +182,35 @@ def train(args):
         
     train_step = len(train_dataloader)
     t_total = train_step // args.gradient_accumulation_steps * args.num_train_epochs // device_num
+    optimizer = None
+    scheduler = None
     def train_loop_fn(model,loader,device,context):
         nonlocal t_total,train_step,device_num 
         # t_total = len(loader) * args.num_train_epochs
-        no_decay = ["bias", "LayerNorm.weight"]
-        optimizer_grouped_parameters = [
-            {
-                "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                "weight_decay": args.weight_decay,
-            },
-            {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-        ]
-        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-        scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-        )
-
-        if not args.tpu and args.fp16:
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+        if not args.tpu :
+            nonlocal optimizer, scheduler
+            # don't need to init optimizer every epoch if not using tpu
+            if not optimizer:
+                no_decay = ["bias", "LayerNorm.weight"]
+                optimizer_grouped_parameters = [
+                    {
+                        "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                        "weight_decay": args.weight_decay,
+                    },
+                    {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+                ]
+                optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+                scheduler = get_linear_schedule_with_warmup(
+                    optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+                )
+                if args.fp16:
+                    model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
 
         model.zero_grad()
         tr_loss = 0.0
-        # for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
-        for step,batch in enumerate(loader):
-
+        iterator = tqdm(enumerate(loader),total = train_step/device_num)
+        # iterator = enumerate(loader)
+        for step,batch in iterator:
             model.train()
             batch = tuple(t.to(device) for t in batch)
             inputs = {
@@ -232,6 +250,7 @@ def train(args):
         predictions = []
         total_test_items = 0
         with torch.no_grad():
+            # iterator = tqdm(enumerate(loader))
             for step,batch in enumerate(loader):
                 model.eval()
                 batch = tuple(t.to(device) for t in batch)
@@ -282,7 +301,6 @@ def train(args):
             correct_count, predictions = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
-        pdb.set_trace()
         # save model, save status 
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         if args.save_method == "Best_Current":
@@ -330,7 +348,7 @@ def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
 
 def eval(args,model,dataloader,set_name,device,num_examples):
     torch.cuda.empty_cache()
-    logger.info("Evaluate on {}".format(set_name))
+    logger.info("Evaluating on {}".format(set_name))
     iterator = tqdm(dataloader, desc="Iteration")
     correct_count = 0
     predictions = []
@@ -389,7 +407,7 @@ if __name__ == "__main__":
     parser.add_argument("--do_finetune",action = "store_true",default = False)
     parser.add_argument("--cs_mode",type = str,default = "wholeQA-Match")
     parser.add_argument("--cs_save_mode",type = str,default = "id")
-    parser.add_argument("--seed",type = int,default = 1,help = "freeze seed")
+    parser.add_argument("--seed",type = int,default = None,help = "freeze seed")
     parser.add_argument('--tpu',action = "store_true")
     parser.add_argument('--task_name',type = str, default = "baseline")
     #在notebook 里 args 需要初始化为[],外部调用py文件不需要
