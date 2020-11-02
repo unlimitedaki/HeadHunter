@@ -264,7 +264,7 @@ def train(args):
                 outputs = model(**inputs)
                 logits = outputs[1]
                 attention_score = outputs[2].cpu().numpy().tolist()
-                pdb.set_trace()
+                # pdb.set_trace()
                 attention_scores += attention_score
                 prediction = torch.argmax(logits,axis = 1)
                 correct_count += (prediction == inputs["labels"]).sum().float()
@@ -316,7 +316,7 @@ def train(args):
                 best_model_dir = os.path.join(output_dir,"best_model")
                 if not os.path.exists(best_model_dir):
                     os.makedirs(best_model_dir)
-                # 
+                pdb.set_trace()
                 f_atten = open(os.path.join(best_model_dir,"prediction.txt"),'w',encoding="utf8")
                 for p,a in zip(predictions,attention_scores):
                     f_atten.write("{}\n".format(str(p)))
