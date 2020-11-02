@@ -315,8 +315,8 @@ def train(args):
                 best_model_dir = os.path.join(output_dir,"best_model")
                 if not os.path.exists(best_model_dir):
                     os.makedirs(best_model_dir)
-
-                f_atten = open(os.path.best_model_dir,"prediction.txt")
+                pdb.set_trace()
+                f_atten = open(os.path.join(best_model_dir,"prediction.txt"),'w',encoding="utf8")
                 for p,a in zip(predictions,attention_scores):
                     f_atten.write("{}\t{}".format(str(p),str(a)))
                 f_atten.close()

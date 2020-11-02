@@ -319,7 +319,7 @@ class BertAttRanker(BertPreTrainedModel):
         logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
 
-        outputs = (reshaped_logits,)
+        outputs = (reshaped_logits,attention_scores)
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
