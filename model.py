@@ -315,10 +315,11 @@ class BertAttRanker(BertPreTrainedModel):
         pooled_output = bert_outputs[1]
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
         atten_output,attention_scores = self.self_att(reshaped_output)
+        attention_scores = attention_scores.view(batch_size,num_choices,-1)
         reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
         logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
-
+        
         outputs = (reshaped_logits,attention_scores)
 
         if labels is not None:

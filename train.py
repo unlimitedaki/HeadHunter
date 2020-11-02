@@ -319,7 +319,9 @@ def train(args):
                 # 
                 f_atten = open(os.path.join(best_model_dir,"prediction.txt"),'w',encoding="utf8")
                 for p,a in zip(predictions,attention_scores):
-                    f_atten.write("{}\t{}\n".format(str(p),str(a)))
+                    f_atten.write("{}\n".format(str(p)))
+                    for att in a:
+                        f_atten.write("\t{}\n".format(att))
                 f_atten.close()
 
                 model_to_save.save_pretrained(best_model_dir)
