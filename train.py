@@ -264,7 +264,8 @@ def train(args):
                 outputs = model(**inputs)
                 logits = outputs[1]
                 attention_score = outputs[2].cpu().numpy().tolist()
-                attention_scores.append(attention_score)
+                pdb.set_trace()
+                attention_scores += attention_score
                 prediction = torch.argmax(logits,axis = 1)
                 correct_count += (prediction == inputs["labels"]).sum().float()
                 predictions += prediction.cpu().numpy().tolist()
@@ -300,7 +301,7 @@ def train(args):
             model = model_parallel.models[0]
             acc = correct_count / len(dev_examples)
         else:
-            train_loop_fn(model,train_dataloader,device,None)
+            # train_loop_fn(model,train_dataloader,device,None)
             correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
@@ -315,10 +316,10 @@ def train(args):
                 best_model_dir = os.path.join(output_dir,"best_model")
                 if not os.path.exists(best_model_dir):
                     os.makedirs(best_model_dir)
-                pdb.set_trace()
+                # 
                 f_atten = open(os.path.join(best_model_dir,"prediction.txt"),'w',encoding="utf8")
                 for p,a in zip(predictions,attention_scores):
-                    f_atten.write("{}\t{}".format(str(p),str(a)))
+                    f_atten.write("{}\t{}\n".format(str(p),str(a)))
                 f_atten.close()
 
                 model_to_save.save_pretrained(best_model_dir)
