@@ -76,29 +76,33 @@ def select_tokenizer(args):
         return XLNetTokenizer.from_pretrained(args.origin_model)
 
 
-def select_model(args):
-    cache = os.path.join(args.output_dir,"cache")
-    if args.task_name == "rerank_csqa":
-        if "albert" in args.origin_model:
-            return AlbertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
-        elif "roberta" in args.origin_model:
-            return RobertaAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
-        elif "bert" in args.origin_model:
-            return BertAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
-        elif "xlnet" in args.origin_model:
-            return XLNetAttRanker.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
-    elif args.task_name == "rerank_csqa_without_rerank":
-        if "bert" in args.origin_model:
-            return BertAttRankerDontRank.from_pretrained(args.origin_model,cache_dir = cache,cs_len = args.cs_len)
+def select_model(args,model_name = None):
+    if not model_name:
+        model_name = args.origin_model
+        cache = os.path.join(args.output_dir,"cache")
     else:
-        if "albert" in args.origin_model:
-            return AlbertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
-        elif "roberta" in args.origin_model:
-            return RobertaForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
-        elif "bert" in args.origin_model:
-            return BertForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
-        elif "xlnet" in args.origin_model:
-            return XLNetForMultipleChoice.from_pretrained(args.origin_model,cache_dir = cache)
+        cache = model_name
+    if args.task_name == "rerank_csqa":
+        if "albert" in model_name:
+            return AlbertAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
+        elif "roberta" in model_name:
+            return RobertaAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
+        elif "bert" in model_name:
+            return BertAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
+        elif "xlnet" in model_name:
+            return XLNetAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
+    elif args.task_name == "rerank_csqa_without_rerank":
+        if "bert" in model_name:
+            return BertAttRankerDontRank.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
+    else:
+        if "albert" in model_name:
+            return AlbertForMultipleChoice.from_pretrained(model_name,cache_dir = cache)
+        elif "roberta" in model_name:
+            return RobertaForMultipleChoice.from_pretrained(model_name,cache_dir = cache)
+        elif "bert" in model_name:
+            return BertForMultipleChoice.from_pretrained(model_name,cache_dir = cache)
+        elif "xlnet" in model_name:
+            return XLNetForMultipleChoice.from_pretrained(model_name,cache_dir = cache)
         
 def set_seed(args):
     logger.info("Freeze seed : {}".format(str(args.seed)))
@@ -301,13 +305,15 @@ def train(args):
             model = model_parallel.models[0]
             acc = correct_count / len(dev_examples)
         else:
-            # train_loop_fn(model,train_dataloader,device,None)
+            train_loop_fn(model,train_dataloader,device,None)
             correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
         # save model, save status 
         
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
+        prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
+        
         if args.save_method == "Best_Current":
             if acc > status["best_Acc"]:
                 status['best_Acc'] = acc
@@ -316,74 +322,123 @@ def train(args):
                 best_model_dir = os.path.join(output_dir,"best_model")
                 if not os.path.exists(best_model_dir):
                     os.makedirs(best_model_dir)
-                pdb.set_trace()
-                f_atten = open(os.path.join(best_model_dir,"prediction.txt"),'w',encoding="utf8")
-                for p,a in zip(predictions,attention_scores):
-                    f_atten.write("{}\n".format(str(p)))
-                    for att in a:
-                        f_atten.write("\t{}\n".format(att))
-                f_atten.close()
-
                 model_to_save.save_pretrained(best_model_dir)
+                prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+                with open(prediction_file,'w',encoding= 'utf8') as f:
+                    json.dump(prediction_json,f,indent = 2,ensure_ascii = False)
                 logger.info("best epoch %d has been saved to %s",epoch,best_model_dir)
             model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model itself
             current_model_dir = os.path.join(output_dir,"current_model")
             if not os.path.exists(current_model_dir):
                 os.makedirs(current_model_dir)
             model_to_save.save_pretrained(current_model_dir)
+            prediction_file = os.path.join(current_model_dir,"{}_{}_{}_prediction_file.json".format("dev",args.cs_mode,args.cs_len))
+            with open(prediction_file,'w',encoding= 'utf8') as f:
+                json.dump(prediction_json,f,indent = 2,ensure_ascii = False)
             logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
         status_dir = os.path.join(output_dir,"status.json")
         json.dump(status,open(status_dir,'w',encoding = 'utf8'))
 
 
-def make_predictions(args,examples,predictions,omcs_corpus,data_type="dev"):
-  cs_file = "OMCS/{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
-  with open(cs_file,'r',encoding="utf8") as f:
-      cs_data = json.load(f)
-  pred_index = 0 #because it's sequential, we simply index it with examples
-  result_json = {}
-  for example in tqdm(examples,desc="puting result into examples"):
-      result_json[example.id] = {}
-      result_json[example.id]['question'] = example.question
-      # result_json[example.id]['endings'] = []
-      result_json[example.id]['prediction'] = predictions[pred_index]
-      result_json[example.id]["prediction_answer"] = example.endings[predictions[pred_index]]
-      pred_index += 1
-      result_json[example.id]['label'] = example.label
-      example_cs = cs_data[example.id]
-      result_json[example.id]['endings'] = example_cs['endings']
-      for ending in result_json[example.id]['endings']:
-          if args.cs_save_mode == 'id':
-              ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
-          else:
-              ending['cs'] = ending["cs"][:args.cs_len]
-  return result_json
+def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data_type="dev"):
+    cs_file = "OMCS/{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
+    with open(cs_file,'r',encoding="utf8") as f:
+        cs_data = json.load(f)
+    pred_index = 0 #because it's sequential, we simply index it with examples
+    result_json = {}
+    for i,example in tqdm(enumerate(examples),desc="puting result into examples"):
+        result_json[example.id] = {}
+        result_json[example.id]['question'] = example.question
+        result_json[example.id]['prediction'] = predictions[i]
+        result_json[example.id]["prediction_answer"] = example.endings[predictions[i]]
+        
+        result_json[example.id]['label'] = example.label
+        example_cs = cs_data[example.id]
+        result_json[example.id]['endings'] = example_cs['endings']
+        
+        for j,ending in enumerate(result_json[example.id]['endings']):
+            if args.cs_save_mode == 'id':
+                ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
+            else:
+                ending['cs'] = ending["cs"][:args.cs_len]
+            ending["attention_scores"] = attention_scores[i][j]
+        # pred_index += 1
+    return result_json
 
 # def test(args.)
 
-def eval(args,model,dataloader,set_name,device,num_examples):
+def eval(args,set_name):
     torch.cuda.empty_cache()
     logger.info("Evaluating on {}".format(set_name))
-    iterator = tqdm(dataloader, desc="Iteration")
-    correct_count = 0
-    predictions = []
+    best_model_dir = os.path.join(output_dir,"best_model")
 
-    with torch.no_grad():
-        for step,batch in enumerate(iterator):
-            model.eval()
-            batch = tuple(t.to(device) for t in batch)
-            inputs = {
-                "input_ids": batch[0],
-                "attention_mask": batch[1],
-                "token_type_ids": batch[2],
-                "labels": batch[3]
-            }
-            outputs = model(**inputs)
-            logits = outputs[1]
-            prediction = torch.argmax(logits,axis = 1)
-            
-            correct_count += (prediction == inputs["labels"]).sum().float()
-            predictions += prediction.cpu().numpy().tolist()
+    model = select_model(args,best_model_dir)
+    omcs_corpus = load_omcs(args)
+    tokenizer = select_tokenizer(args)
+    examples,_,dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
+    # setup device
+    if args.tpu:
+        # xla packages
+        import torch_xla
+        import torch_xla.distributed.data_parallel as dp
+        import torch_xla.debug.metrics as met
+        import torch_xla.utils.utils as xu
+        import torch_xla.core.xla_model as xm
+        import torch_xla.test.test_utils as test_utils
+        # tpu still has some bugs, to be fixed 
+        
+    else:
+        # else we use gpu, colab only provide one gpu, so we won't use distributed trainging
+        device = torch.device('cuda:0')
+        sampler = SequentialSampler(dev_dataset) 
+        dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
+        device_num = 1
+
+    def test_loop_fn(model,loader,device,context):
+        model.eval()
+        torch.cuda.empty_cache()
+        correct_count = 0
+        predictions = []
+        attention_scores = []
+        with torch.no_grad():
+            for step,batch in enumerate(loader):
+                model.eval()
+                batch = tuple(t.to(device) for t in batch)
+                if len(batch) == 4:
+                    inputs = {
+                        "input_ids": batch[0],
+                        "attention_mask": batch[1],
+                        "token_type_ids": batch[2],
+                        "labels": batch[3]
+                    }
+                else:
+                    inputs = {
+                        "input_ids": batch[0],
+                        "attention_mask": batch[1],
+                        "token_type_ids": batch[2],
+                    }
+                outputs = model(**inputs)
+                logits = outputs[1]
+                attention_score = outputs[2].cpu().numpy().tolist()
+                attention_scores += attention_score
+                prediction = torch.argmax(logits,axis = 1)
+                correct_count += (prediction == inputs["labels"]).sum().float()
+                predictions += prediction.cpu().numpy().tolist()
+        return correct_count,predictions,attention_scores
+
+    if args.tpu:
+        model_parallel = dp.DataParallel(model, device_ids=devices)
+    else:
+        device = torch.device('cuda:0')
+        model = model.to(device)
+    
+    # Test!
+    correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
+
+    prediction_json = make_predictions(args,examples,predictions,attention_scores,omcs_corpus,set_name)
+    prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.cs_len))
+    with open(prediction_file,'w',encoding= 'utf8') as f:
+        json.dump(prediction_json,f,indent = 2,ensure_ascii = False)
     return correct_count/num_examples, predictions
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',datefmt = '%m/%d/%Y %H:%M:%S',level = logging.INFO)
@@ -425,9 +480,13 @@ if __name__ == "__main__":
     parser.add_argument("--seed",type = int,default = None,help = "freeze seed")
     parser.add_argument('--tpu',action = "store_true")
     parser.add_argument('--task_name',type = str, default = "baseline")
+    parser.add_argument("--test",action = "store_true")
     #在notebook 里 args 需要初始化为[],外部调用py文件不需要
     args = parser.parse_args()
     # if args.tpu:
     #     tpu_training(args)
     # else:
-    train(args)
+    if args.test:
+        eval(args)
+    else:
+        train(args)
