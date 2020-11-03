@@ -370,12 +370,13 @@ def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data
 def eval(args,set_name):
     torch.cuda.empty_cache()
     logger.info("Evaluating on {}".format(set_name))
+    output_dir = os.path.join(args.output_dir,args.save_model_name)
     best_model_dir = os.path.join(output_dir,"best_model")
 
     model = select_model(args,best_model_dir)
     omcs_corpus = load_omcs(args)
     tokenizer = select_tokenizer(args)
-    examples,_,dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
+    examples,_,dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,set_name)
     # setup device
     if args.tpu:
         # xla packages
@@ -390,8 +391,8 @@ def eval(args,set_name):
     else:
         # else we use gpu, colab only provide one gpu, so we won't use distributed trainging
         device = torch.device('cuda:0')
-        sampler = SequentialSampler(dev_dataset) 
-        dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=args.eval_batch_size)
+        sampler = SequentialSampler(dataset) 
+        dataloader = DataLoader(dataset, sampler=sampler, batch_size=args.eval_batch_size)
         device_num = 1
 
     def test_loop_fn(model,loader,device,context):
@@ -401,7 +402,7 @@ def eval(args,set_name):
         predictions = []
         attention_scores = []
         with torch.no_grad():
-            for step,batch in enumerate(loader):
+            for step,batch in tqdm(enumerate(loader)):
                 model.eval()
                 batch = tuple(t.to(device) for t in batch)
                 if len(batch) == 4:
@@ -422,7 +423,8 @@ def eval(args,set_name):
                 attention_score = outputs[2].cpu().numpy().tolist()
                 attention_scores += attention_score
                 prediction = torch.argmax(logits,axis = 1)
-                correct_count += (prediction == inputs["labels"]).sum().float()
+                if len(batch) == 4:
+                    correct_count += (prediction == inputs["labels"]).sum().float()
                 predictions += prediction.cpu().numpy().tolist()
         return correct_count,predictions,attention_scores
 
@@ -433,13 +435,13 @@ def eval(args,set_name):
         model = model.to(device)
     
     # Test!
-    correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
+    correct_count, predictions, attention_scores = test_loop_fn(model,dataloader,device,None)
 
     prediction_json = make_predictions(args,examples,predictions,attention_scores,omcs_corpus,set_name)
     prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.cs_len))
     with open(prediction_file,'w',encoding= 'utf8') as f:
         json.dump(prediction_json,f,indent = 2,ensure_ascii = False)
-    return correct_count/num_examples, predictions
+    return 
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',datefmt = '%m/%d/%Y %H:%M:%S',level = logging.INFO)
 logger = logging.getLogger(__name__)
@@ -481,12 +483,15 @@ if __name__ == "__main__":
     parser.add_argument('--tpu',action = "store_true")
     parser.add_argument('--task_name',type = str, default = "baseline")
     parser.add_argument("--test",action = "store_true")
+    parser.add_argument("--dev",action = "store_true")
     #在notebook 里 args 需要初始化为[],外部调用py文件不需要
     args = parser.parse_args()
     # if args.tpu:
     #     tpu_training(args)
     # else:
     if args.test:
-        eval(args)
+        eval(args,"test")
+    elif args.dev:
+        eval(args,"dev")
     else:
         train(args)
