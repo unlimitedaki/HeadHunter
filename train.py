@@ -247,6 +247,7 @@ def train(args):
                 logger.info("device:[%s] average_step_loss=%s @ step = %s on epoch = %s",device,str(avg_loss),str(step+1),str(epoch+1))
     
     def test_loop_fn(model,loader,device,context):
+        # for dev 
         model.eval()
         torch.cuda.empty_cache()
         # logger.info("Evaluate on {}".format(set_name))
@@ -267,9 +268,9 @@ def train(args):
                 }
                 outputs = model(**inputs)
                 logits = outputs[1]
-                attention_score = outputs[2].cpu().numpy().tolist()
-                # pdb.set_trace()
-                attention_scores += attention_score
+                if len(outputs) == 3:
+                    attention_score = outputs[2].cpu().numpy().tolist()
+                    attention_scores += attention_score
                 prediction = torch.argmax(logits,axis = 1)
                 correct_count += (prediction == inputs["labels"]).sum().float()
                 predictions += prediction.cpu().numpy().tolist()
@@ -344,7 +345,6 @@ def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data
     cs_file = "OMCS/{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
     with open(cs_file,'r',encoding="utf8") as f:
         cs_data = json.load(f)
-    pred_index = 0 #because it's sequential, we simply index it with examples
     result_json = {}
     for i,example in tqdm(enumerate(examples),desc="puting result into examples"):
         result_json[example.id] = {}
@@ -361,7 +361,9 @@ def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data
                 ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
             else:
                 ending['cs'] = ending["cs"][:args.cs_len]
-            ending["attention_scores"] = attention_scores[i][j]
+            if attention_scores != []:
+                # some baseline model won't output any attention score. 
+                ending["attention_scores"] = attention_scores[i][j]
         # pred_index += 1
     return result_json
 
@@ -396,13 +398,14 @@ def eval(args,set_name):
         device_num = 1
 
     def test_loop_fn(model,loader,device,context):
+        # for test 
         model.eval()
         torch.cuda.empty_cache()
         correct_count = 0
         predictions = []
         attention_scores = []
         with torch.no_grad():
-            for step,batch in tqdm(enumerate(loader)):
+            for step,batch in tqdm(enumerate(loader),total = len(loader)):
                 model.eval()
                 batch = tuple(t.to(device) for t in batch)
                 if len(batch) == 4:
@@ -420,8 +423,13 @@ def eval(args,set_name):
                     }
                 outputs = model(**inputs)
                 logits = outputs[1]
-                attention_score = outputs[2].cpu().numpy().tolist()
-                attention_scores += attention_score
+                if len(batch) == 3 and len(output) == 2:
+                    attention_score = outputs[1].cpu().numpy().tolist()
+                    attention_scores += attention_score
+                elif len(outputs) == 3:
+                    attention_score = outputs[2].cpu().numpy().tolist()
+                    attention_scores += attention_score
+    
                 prediction = torch.argmax(logits,axis = 1)
                 if len(batch) == 4:
                     correct_count += (prediction == inputs["labels"]).sum().float()
@@ -433,12 +441,16 @@ def eval(args,set_name):
     else:
         device = torch.device('cuda:0')
         model = model.to(device)
+        if args.fp16:
+            model = amp.initialize(model,opt_level = "O1")
     
     # Test!
     correct_count, predictions, attention_scores = test_loop_fn(model,dataloader,device,None)
 
     prediction_json = make_predictions(args,examples,predictions,attention_scores,omcs_corpus,set_name)
     prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.cs_len))
+    if set_name == "dev":
+        logger.info("DEV ACC is {}".format(correct_count/float(len(examples))))
     with open(prediction_file,'w',encoding= 'utf8') as f:
         json.dump(prediction_json,f,indent = 2,ensure_ascii = False)
     return 
@@ -484,11 +496,8 @@ if __name__ == "__main__":
     parser.add_argument('--task_name',type = str, default = "baseline")
     parser.add_argument("--test",action = "store_true")
     parser.add_argument("--dev",action = "store_true")
-    #在notebook 里 args 需要初始化为[],外部调用py文件不需要
+    
     args = parser.parse_args()
-    # if args.tpu:
-    #     tpu_training(args)
-    # else:
     if args.test:
         eval(args,"test")
     elif args.dev:
