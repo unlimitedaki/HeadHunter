@@ -350,12 +350,12 @@ def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data
         result_json[example.id] = {}
         result_json[example.id]['question'] = example.question
         result_json[example.id]['prediction'] = predictions[i]
+        # pdb.set_trace()
         result_json[example.id]["prediction_answer"] = example.endings[predictions[i]]
         
         result_json[example.id]['label'] = example.label
         example_cs = cs_data[example.id]
         result_json[example.id]['endings'] = example_cs['endings']
-        
         for j,ending in enumerate(result_json[example.id]['endings']):
             if args.cs_save_mode == 'id':
                 ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
@@ -374,11 +374,11 @@ def eval(args,set_name):
     logger.info("Evaluating on {}".format(set_name))
     output_dir = os.path.join(args.output_dir,args.save_model_name)
     best_model_dir = os.path.join(output_dir,"best_model")
-
+    is_training = args.dev 
     model = select_model(args,best_model_dir)
     omcs_corpus = load_omcs(args)
     tokenizer = select_tokenizer(args)
-    examples,_,dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,set_name)
+    examples,_,dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,set_name,is_training)
     # setup device
     if args.tpu:
         # xla packages
@@ -422,8 +422,8 @@ def eval(args,set_name):
                         "token_type_ids": batch[2],
                     }
                 outputs = model(**inputs)
-                logits = outputs[1]
-                if len(batch) == 3 and len(output) == 2:
+                logits = outputs[1] if len(batch) == 4 else outputs[0]
+                if len(batch) == 3 and len(outputs) == 2:
                     attention_score = outputs[1].cpu().numpy().tolist()
                     attention_scores += attention_score
                 elif len(outputs) == 3:
@@ -496,7 +496,7 @@ if __name__ == "__main__":
     parser.add_argument('--task_name',type = str, default = "baseline")
     parser.add_argument("--test",action = "store_true")
     parser.add_argument("--dev",action = "store_true")
-    
+
     args = parser.parse_args()
     if args.test:
         eval(args,"test")
