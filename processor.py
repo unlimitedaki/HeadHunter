@@ -281,7 +281,7 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
     if is_training :
         all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
-        dataset = TensorDataset(all_input_ids,all_attention_masks, all_token_type_ids, all_labels)
+        dataset = TensorDataset(all_input_ids,all_attention_masks, all_token_type_ids, all_labels)   # Dataset wrapping tensors.
     else:
         dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
     # data = {}
