@@ -321,7 +321,6 @@ class BertAttRanker(BertPreTrainedModel):
         attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(2)
         # pdb.set_trace()
         reshaped_output = F.tanh(torch.matmul(attention_scores,reshaped_output)).squeeze(2)
-        # 
         # reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
 
         logits = self.classifier(reshaped_output)
