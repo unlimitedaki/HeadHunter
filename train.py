@@ -1,26 +1,30 @@
+# standard libraries
 import os 
 import sys
-if os.path.exists("external_libraries"):
-    sys.path.append('external_libraries')
-import torch
-import transformers
 import json
-from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
-from tqdm.notebook import tqdm
 import logging
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset, DistributedSampler
 import argparse
 import time
+import pdb
+import random
+if os.path.exists("external_libraries"):
+    sys.path.append('external_libraries')
+
+# third-part libraries
+import numpy as np
+from apex import amp
+from tqdm.notebook import tqdm
+import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset, DistributedSampler
+import transformers
+from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
 from transformers import AdamW,get_linear_schedule_with_warmup
 from transformers.modeling_utils import SequenceSummary
-import pdb
-import numpy as np
+
+# self build
 from processor import *
 from model import *
-from apex import amp
-import random
-
 
 
 def clean_data(cs_str):

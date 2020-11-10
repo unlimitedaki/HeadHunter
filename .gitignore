@@ -1,0 +1,35 @@
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# pycache
+__pycache__
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode
+.idea
+
+/OMCS/
+/model/
+/CSQA/
