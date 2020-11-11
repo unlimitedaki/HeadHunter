@@ -97,7 +97,7 @@ def select_model(args,model_name = None):
             return XLNetAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
     elif args.task_name == "rerank_csqa_without_rerank":
         if "bert" in model_name:
-            return BertAttRankerDontRank.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
+            return BertCSmean.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
     else:
         if "albert" in model_name:
             return AlbertForMultipleChoice.from_pretrained(model_name,cache_dir = cache)

@@ -253,26 +253,6 @@ class SelfAttention(nn.Module):
         context_layer = torch.matmul(attention_probs, value_layer)
         return context_layer,attention_scores
 
-class SummaryAttentionLayer(nn.Module):
-    '''
-    this layer summaries representation of all commonsenses,
-    and outputs their attention score
-    seems to be a good idea!
-    '''
-    def __init__(self,hidden_size):
-        super().__init__()
-        self.w = nn.Parameter(torch.FloatTensor(1,hidden_size))
-
-    def forward(self,x):
-        x = F.tanh(x)
-        x_t = torch.transpose(x,-2,-1)
-        pdb.set_trace()
-        inter_attens = F.softmax(torch.matmul(self.w,x_t),dim=-1)
-        output = F.tanh(torch.matmul(inter_attens,x))
-        output = output.squeeze(-2)
-        return output
-
-
 class BertAttRanker(BertPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
@@ -314,13 +294,14 @@ class BertAttRanker(BertPreTrainedModel):
 
         pooled_output = bert_outputs[1]
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
+
         atten_output,attention_scores = self.self_att(reshaped_output)
         attention_scores = attention_scores.view(batch_size,num_choices,-1)
         # attention summary 
         reshaped_output = reshaped_output.view(batch_size,num_choices,self.cs_len,-1)
         attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(2)
-        # pdb.set_trace()
-        reshaped_output = F.tanh(torch.matmul(attention_scores,reshaped_output)).squeeze(2)
+        reshaped_output = torch.tanh(torch.matmul(attention_scores,reshaped_output)).squeeze(2)
+
         # reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
 
         logits = self.classifier(reshaped_output)
@@ -335,14 +316,14 @@ class BertAttRanker(BertPreTrainedModel):
 
         return outputs
 
-class BertAttRankerDontRank(BertPreTrainedModel):
+class BertCSmean(BertPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
         self.cs_len = cs_len
         self.bert = BertModel(config)
         # self.self_att = SelfAttention(config) don't rerank
-        # self.classifier = nn.Linear(config.hidden_size,1)
-        self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
+        self.classifier = nn.Linear(config.hidden_size,1)
+        # self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
 
@@ -376,7 +357,9 @@ class BertAttRankerDontRank(BertPreTrainedModel):
 
         pooled_output = bert_outputs[1] # (bz*num_choice*cslen,hz)
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
-        reshaped_output = reshaped_output.view(int(batch_size*num_choices),self.cs_len*pooled_output.size(-1))
+        # pdb.set_trace()
+        reshaped_output = torch.mean(reshaped_output,dim = -2)
+        # reshaped_output = reshaped_output.view(int(batch_size*num_choices),self.cs_len*pooled_output.size(-1))
         logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
 
@@ -398,8 +381,6 @@ class AlbertAttRanker(AlbertPreTrainedModel):
         self.self_att = SelfAttention(config)
         self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.init_weights()
-
         self.init_weights()
 
     def forward(
