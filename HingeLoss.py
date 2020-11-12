@@ -22,5 +22,5 @@ class HingeLoss(nn.Module):
         oh_labels = oh_labels * 2 - 1           # 0, 1  -> -1, 1
 
         Loss = nn.HingeEmbeddingLoss(self.margin)
-        return Loss(logits_pn, oh_labels*2-1)
+        return Loss(logits_pn, oh_labels)
 
