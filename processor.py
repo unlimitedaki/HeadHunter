@@ -1,10 +1,11 @@
-import json
+import os
 import re
 import pdb
+import json
 import xml.dom.minidom
 from xml.dom.minidom import parse
+
 import torch
-import os
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
 
@@ -295,7 +296,7 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     #     with open(cache_path,'rb') as f:
     #         data = torch.load(f)
     #         examples,features,dataset = data["examples"],data["features"],data["dataset"] 
-    return examples,features,dataset
+    return examples, features, dataset
 
 
 # def load_csqa_dataset(tokenizer,args,data_type,is_training=True):

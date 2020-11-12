@@ -1,11 +1,13 @@
-from transformers import BertPreTrainedModel,BertModel,AlbertModel,AlbertPreTrainedModel,RobertaModel,XLNetPreTrainedModel,XLNetModel
-from transformers.modeling_utils import SequenceSummary
-from torch.nn import CrossEntropyLoss
-import torch.nn.functional as F
-import torch
-import torch.nn as nn
 import pdb
 
+from transformers import BertPreTrainedModel,BertModel,AlbertModel,AlbertPreTrainedModel,RobertaModel,XLNetPreTrainedModel,XLNetModel
+from transformers.modeling_utils import SequenceSummary
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn import CrossEntropyLoss
+
+from HingeLoss import HingeLoss
 
 # IR-CSQA
 class BertForMultipleChoice(BertPreTrainedModel):
@@ -27,8 +29,7 @@ class BertForMultipleChoice(BertPreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
-        output_attentions=False,
-    ):
+        output_attentions=False,):
         
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
@@ -57,11 +58,15 @@ class BertForMultipleChoice(BertPreTrainedModel):
         outputs = (reshaped_logits,) + outputs[2:]  # add hidden states and attention if they are here
 
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
+            # loss_fct = CrossEntropyLoss()
+            loss_fct = HingeLoss()
             loss = loss_fct(reshaped_logits, labels)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
+
+
+
 
 class AlbertForMultipleChoice(AlbertPreTrainedModel):
     def __init__(self, config):

@@ -138,7 +138,7 @@ def train(args):
     if args.seed:
         set_seed(args)
     # loading data
-    omcs_corpus = load_omcs(args)
+    omcs_corpus = load_omcs(args)   # list ['str1', 'str2', ...]
     tokenizer = select_tokenizer(args)
     _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
     dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
@@ -193,10 +193,10 @@ def train(args):
     optimizer = None
     scheduler = None
     def train_loop_fn(model,loader,device,context):
-        nonlocal t_total,train_step,device_num 
+        nonlocal t_total,train_step,device_num  # 外部嵌套函数的变量
         # t_total = len(loader) * args.num_train_epochs
         if not args.tpu :
-            nonlocal optimizer, scheduler
+            nonlocal optimizer, scheduler  
             # don't need to init optimizer every epoch if not using tpu
             if not optimizer:
                 no_decay = ["bias", "LayerNorm.weight"]
