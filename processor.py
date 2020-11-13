@@ -260,7 +260,7 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
         
     if "rerank_csqa" in args.task_name:
         processor = CSQARankerProcessor()
-        max_length = args.max_length + 12
+        max_length = args.max_length 
     else:
         processor = CSQAProcessor()
         max_length = args.max_length + 12 * args.cs_len
