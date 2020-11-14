@@ -259,7 +259,9 @@ class BertAttRanker(BertPreTrainedModel):
         self.cs_len = cs_len
         self.bert = BertModel(config)
         self.self_att = SelfAttention(config)
-        self.classifier = nn.Linear(config.hidden_size,1)
+        # self.classifier = nn.Linear(config.hidden_size,1)
+        # concatenate summary
+        self.classifier = nn.Linear(2*config.hidden_size,1)
         # self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
@@ -294,17 +296,23 @@ class BertAttRanker(BertPreTrainedModel):
 
         pooled_output = bert_outputs[1]
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
+        # mean summary
+        mean_output = torch.mean(reshaped_output,dim = -2).view(batch_size,num_choices,-1)
 
+        # self attention
         atten_output,attention_scores = self.self_att(reshaped_output)
         attention_scores = attention_scores.view(batch_size,num_choices,-1)
+        
         # attention summary 
         reshaped_output = reshaped_output.view(batch_size,num_choices,self.cs_len,-1)
         attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(2)
         reshaped_output = torch.tanh(torch.matmul(attention_scores,reshaped_output)).squeeze(2)
 
-        # reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
+        # concatenate summary
+        # pdb.set_trace()
+        summary_output = torch.cat([mean_output,reshaped_output],dim = -1)
 
-        logits = self.classifier(reshaped_output)
+        logits = self.classifier(summary_output)
         reshaped_logits = logits.view(-1, num_choices)
         
         outputs = (reshaped_logits,attention_scores)
