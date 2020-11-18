@@ -143,7 +143,7 @@ def train(args):
     omcs_corpus = load_omcs(args)
     tokenizer = select_tokenizer(args)
     _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
-    dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
+    dev_examples,dev_features,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
     # _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
     # setup device
     if args.tpu:
@@ -319,10 +319,11 @@ def train(args):
         if args.tpu:
             model_parallel(train_loop_fn, train_dataloader,)
             results = model_parallel(test_loop_fn, dev_dataloader, fixed_batch_size = True)
-            correct_count = sum([float(item[0]) for item in results])
+            # correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
             attention_scores = [i for item in results for i in item[2]]
             model = model_parallel.models[0]
+            correct_count, predictions,attention_scores = truncate_prediction(len(dev_examples),predictions,attention_scores,dev_features)
             acc = correct_count / len(dev_examples)
         else:
             train_loop_fn(model,train_dataloader,device,None)
@@ -358,6 +359,18 @@ def train(args):
             logger.info("epoch %d has been saved to %s",epoch,current_model_dir)
         status_dir = os.path.join(output_dir,"status.json")
         json.dump(status,open(status_dir,'w',encoding = 'utf8'))
+
+def truncate_prediction(num_example,predictions,attention_scores,features,is_training = True):
+    predictions = predictions[:num_example]
+    attention_scores = predictions[:num_example]
+    features = features[:num_example]
+    correct_count = 0
+    if is_training:
+        all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
+        pred_tensor = torch.tensor(predictions)
+        pdb.set_trace()
+        correct_count = (pred_tensor == all_labels).sum().float()
+    return correct_count, predictions, attention_scores
 
 
 def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data_type="dev"):
@@ -465,7 +478,7 @@ def eval(args,set_name):
     
     # Test!
     correct_count, predictions, attention_scores = test_loop_fn(model,dataloader,device,None)
-
+    correct_count, predictions, attention_scores = truncate_prediction(len(examples),predictions,attention_scores)
     prediction_json = make_predictions(args,examples,predictions,attention_scores,omcs_corpus,set_name)
     prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.cs_len))
     if set_name == "dev":

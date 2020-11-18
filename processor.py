@@ -7,6 +7,7 @@ import torch
 import os
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
+import random
 
 BLANK_STR = "___"
 class MultipleChoiceExample(object): # examples for all kind of dataset s
@@ -252,8 +253,32 @@ def feature_padding(args,
     so,
     we calculate the min Least common multiple between batch size and tpu cores(8) which larger than examples 
     for training set , we randomly pick examples to pad
-    for dev set, we pad zero tensors, and set label -1 as 
+    for dev set, we pad zero tensors, and set label = -1 
+    input: every tensor list of input
+    output: nothing
     '''
+    cur_number = all_input_ids.shape[0]
+    seq_len = all_input_ids.shape[-1]
+    batch_x = args.train_batch_size * 8
+    target_number = (cur_number//batch_x + 1) * batch_x
+    padding_number = target_number - cur_number
+    if data_type == "dev":
+        padding_input = torch.zeros((padding_number,all_input_ids.shape[1],all_input_ids.shape[2]),dtype = torch.long)
+        all_input_ids = torch.cat((all_input_ids,padding_input),dim = 0)
+        all_attention_masks = torch.cat((all_attention_masks,padding_input),dim = 0)
+        all_token_type_ids = torch.cat((all_token_type_ids,padding_input),dim = 0)
+        if all_labels != None:
+            all_labels = torch.cat((all_labels,torch.tensor([-1] * padding_number,dtype = torch.long)),dim = 0)
+    elif data_type == "train":
+        padding_index = random.sample(range(0,cur_number),padding_number)
+        all_input_ids = torch.cat((all_input_ids,torch.tensor([all_input_ids[i].numpy() for i in padding_index],dtype=torch.long)),0)
+        all_attention_masks = torch.cat((all_attention_masks,torch.tensor([all_attention_masks[i].numpy() for i in padding_index],dtype=torch.long)),0)
+        all_token_type_ids = torch.cat((all_token_type_ids,torch.tensor([all_token_type_ids[i].numpy() for i in padding_index],dtype=torch.long)),0)
+        if all_labels != None:
+            all_labels = torch.cat((all_labels,torch.tensor([all_labels[i] for i in padding_index],dtype=torch.long)),0)
+        
+    assert len(all_input_ids) == target_number
+    return all_input_ids, all_attention_masks, all_token_type_ids, all_labels
 
 
 def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True):
@@ -297,8 +322,9 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     all_labels = torch.tensor([f.label for f in features], dtype=torch.long) if is_training else None
     if is_training :
         if args.tpu:
-            feature_padding(args, data_type, all_input_ids, all_attention_masks, all_token_type_ids, all_labels)
-        dataset = TensorDataset(all_input_ids,all_attention_masks, all_token_type_ids, all_labels)   # Dataset wrapping tensors.
+            all_input_ids, all_attention_masks, all_token_type_ids, all_labels = feature_padding(args, data_type, all_input_ids, all_attention_masks, all_token_type_ids, all_labels)
+
+        dataset = TensorDataset(all_input_ids, all_attention_masks, all_token_type_ids, all_labels)   # Dataset wrapping tensors.
     else:
         dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
     # data = {}
