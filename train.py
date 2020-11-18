@@ -331,7 +331,6 @@ def train(args):
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
         # save model, save status 
-        pdb.set_trace()
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
         
@@ -363,13 +362,6 @@ def train(args):
 def truncate_prediction(num_example,predictions,attention_scores,is_training = True):
     predictions = predictions[:num_example]
     attention_scores = attention_scores[:num_example]
-    # features = features[:num_example]
-    # correct_count = 0
-    # if is_training:
-    #     all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
-    #     pred_tensor = torch.tensor(predictions)
-    #     pdb.set_trace()
-    #     correct_count = (pred_tensor == all_labels).sum().float()
     return predictions, attention_scores
 
 
