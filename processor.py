@@ -241,6 +241,21 @@ def load_omcs(args):
         omcs_corpus = json.load(f)
     return omcs_corpus
 
+def feature_padding(args, 
+    data_type, 
+    all_input_ids, 
+    all_attention_masks, 
+    all_token_type_ids, 
+    all_labels = None):
+    '''
+    Multi threads tpu sync ensures every tpu trains same amount of batchs, I don't know other ways to fix it
+    so,
+    we calculate the min Least common multiple between batch size and tpu cores(8) which larger than examples 
+    for training set , we randomly pick examples to pad
+    for dev set, we pad zero tensors, and set label -1 as 
+    '''
+
+
 def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True):
     '''
     load csqa dateset and put in commonsense
@@ -260,7 +275,7 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
         
     if "rerank_csqa" in args.task_name:
         processor = CSQARankerProcessor()
-        max_length = args.max_length + 12
+        max_length = args.max_length
     else:
         processor = CSQAProcessor()
         max_length = args.max_length + 12 * args.cs_len
@@ -279,8 +294,10 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     all_input_ids = torch.tensor([f.select_field("input_ids") for f in features], dtype=torch.long)
     all_attention_masks = torch.tensor([f.select_field("attention_mask") for f in features], dtype=torch.long)
     all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
+    all_labels = torch.tensor([f.label for f in features], dtype=torch.long) if is_training else None
     if is_training :
-        all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
+        if args.tpu:
+            feature_padding(args, data_type, all_input_ids, all_attention_masks, all_token_type_ids, all_labels)
         dataset = TensorDataset(all_input_ids,all_attention_masks, all_token_type_ids, all_labels)   # Dataset wrapping tensors.
     else:
         dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
@@ -296,26 +313,3 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     #         data = torch.load(f)
     #         examples,features,dataset = data["examples"],data["features"],data["dataset"] 
     return examples,features,dataset
-
-
-# def load_csqa_dataset(tokenizer,args,data_type,is_training=True):
-#     if data_type == "dev":
-#         file_name = os.path.join(args.data_dir,args.dev_file)
-#     elif data_type == "test":
-#         file_name = os.path.join(args.data_dir,args.test_file)
-#     else :
-#         file_name = os.path.join(args.data_dir,args.train_file)
-#     # cache_name = os.path.join
-#     processor = CSQAProcessor()
-#     examples = processor.read_examples(file_name,is_training)
-#     features = processor.convert_examples_to_features(tokenizer,examples,args.max_length,is_training)
-
-#     all_input_ids = torch.tensor([f.select_field("input_ids") for f in features], dtype=torch.long)
-#     all_attention_masks = torch.tensor([f.select_field("attention_mask") for f in features], dtype=torch.long)
-#     all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
-#     if is_training :
-#         all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
-#         dataset = TensorDataset(all_input_ids,all_attention_masks, all_token_type_ids, all_labels)
-#     else:
-#         dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
-#     return examples,features,dataset

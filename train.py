@@ -134,6 +134,8 @@ def train(args):
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
+    logger.setLevel(logging.INFO)
+    logger.info("Logger Level: INFO")
     # freeze seed
     if args.seed:
         set_seed(args)
@@ -194,44 +196,29 @@ def train(args):
     scheduler = None
     def train_loop_fn(model,loader,device,context):
         nonlocal t_total,train_step,device_num 
+        # nonlocal optimizer, scheduler
         # t_total = len(loader) * args.num_train_epochs
-        if not args.tpu :
-            nonlocal optimizer, scheduler
-            # don't need to init optimizer every epoch if not using tpu
-            if not optimizer:
-                no_decay = ["bias", "LayerNorm.weight"]
-                optimizer_grouped_parameters = [
-                    {
-                        "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                        "weight_decay": args.weight_decay,
-                    },
-                    {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-                ]
-                optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-                scheduler = get_linear_schedule_with_warmup(
-                    optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-                )
-                if args.fp16:
-                    model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
-        else:
-            no_decay = ["bias", "LayerNorm.weight"]
-            optimizer_grouped_parameters = [
-                {
-                    "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                    "weight_decay": args.weight_decay,
-                },
-                {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-            ]
-            optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-            scheduler = get_linear_schedule_with_warmup(
-                optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-            )
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                "weight_decay": args.weight_decay,
+            },
+            {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        ]
+        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+        )
+
+        if not args.tpu and args.fp16:
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
 
         model.zero_grad()
         tr_loss = 0.0
-        iterator = tqdm(enumerate(loader),total = train_step/device_num)
-        # iterator = enumerate(loader)
-        for step,batch in iterator:
+        for step,batch in tqdm(enumerate(loader),total = train_step/device_num):
+        # for step,batch in enumerate(loader):
+
             model.train()
             batch = tuple(t.to(device) for t in batch)
             inputs = {
@@ -268,13 +255,14 @@ def train(args):
         model.eval()
         torch.cuda.empty_cache()
         # logger.info("Evaluate on {}".format(set_name))
+        
         correct_count = 0
         predictions = []
         attention_scores = []
         total_test_items = 0
         with torch.no_grad():
             # iterator = tqdm(enumerate(loader))
-            for step,batch in enumerate(loader):
+            for step,batch in tqdm(enumerate(loader)):
                 model.eval()
                 batch = tuple(t.to(device) for t in batch)
                 inputs = {
@@ -292,7 +280,7 @@ def train(args):
                 correct_count += (prediction == inputs["labels"]).sum().float()
                 predictions += prediction.cpu().numpy().tolist()
                 total_test_items += batch[0].shape[0]
-        # logger.info("test_items of device[{}] is {}".format(device,str(total_test_items)))
+        logger.info("test_items of device[{}] is {}".format(device,str(total_test_items)))
         return correct_count,predictions,attention_scores
 
     def init_status():
@@ -313,13 +301,27 @@ def train(args):
         device = torch.device('cuda:0')
         model = model.to(device)
 
+    # no_decay = ["bias", "LayerNorm.weight"]
+    # optimizer_grouped_parameters = [
+    #     {
+    #         "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+    #         "weight_decay": args.weight_decay,
+    #     },
+    #     {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+    # ]
+    # optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    # scheduler = get_linear_schedule_with_warmup(
+    #     optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+    # )
+
     for epoch in range(0,args.num_train_epochs):
         logger.info("Epoch: {}".format(str(epoch)))
         if args.tpu:
             model_parallel(train_loop_fn, train_dataloader,)
-            results = model_parallel(test_loop_fn, dev_dataloader, fixed_batch_size = False)
+            results = model_parallel(test_loop_fn, dev_dataloader, fixed_batch_size = True)
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
+            attention_scores = [i for item in results for i in item[2]]
             model = model_parallel.models[0]
             acc = correct_count / len(dev_examples)
         else:
@@ -330,7 +332,7 @@ def train(args):
         # save model, save status 
         
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
-        prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
+        # prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
         
         if args.save_method == "Best_Current":
             if acc > status["best_Acc"]:
