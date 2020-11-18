@@ -25,7 +25,7 @@ from transformers.modeling_utils import SequenceSummary
 # self build
 from processor import *
 from model import *
-
+print(transformers.__version__)
 
 def clean_data(cs_str):
     if "The statement " in cs_str:
@@ -213,6 +213,19 @@ def train(args):
                 )
                 if args.fp16:
                     model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+        else:
+            no_decay = ["bias", "LayerNorm.weight"]
+            optimizer_grouped_parameters = [
+                {
+                    "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                    "weight_decay": args.weight_decay,
+                },
+                {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+            ]
+            optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+            )
 
         model.zero_grad()
         tr_loss = 0.0
@@ -303,8 +316,8 @@ def train(args):
     for epoch in range(0,args.num_train_epochs):
         logger.info("Epoch: {}".format(str(epoch)))
         if args.tpu:
-            model_parallel(train_loop_fn, train_dataloader)
-            results = model_parallel(test_loop_fn, dev_dataloader)
+            model_parallel(train_loop_fn, train_dataloader,)
+            results = model_parallel(test_loop_fn, dev_dataloader, fixed_batch_size = False)
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
             model = model_parallel.models[0]
