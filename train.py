@@ -346,6 +346,7 @@ def train(args):
 
 
 def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data_type="dev"):
+    cs_len = args.dev_cs_len
     cs_file = "OMCS/{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
     with open(cs_file,'r',encoding="utf8") as f:
         cs_data = json.load(f)
@@ -362,9 +363,9 @@ def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data
         result_json[example.id]['endings'] = example_cs['endings']
         for j,ending in enumerate(result_json[example.id]['endings']):
             if args.cs_save_mode == 'id':
-                ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
+                ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:cs_len]]
             else:
-                ending['cs'] = ending["cs"][:args.cs_len]
+                ending['cs'] = ending["cs"][:cs_len]
             if attention_scores != []:
                 # some baseline model won't output any attention score. 
                 ending["attention_scores"] = attention_scores[i][j]
@@ -454,7 +455,18 @@ def eval(args,set_name):
     prediction_json = make_predictions(args,examples,predictions,attention_scores,omcs_corpus,set_name)
     prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.dev_cs_len))
     if set_name == "dev":
-        logger.info("DEV ACC is {}".format(correct_count/float(len(examples))))
+        acc = correct_count/float(len(examples))
+        logger.info("DEV ACC is {}".format(acc))
+    
+        dev_file = os.path.join(output_dir,"dev_res.json")
+        if os.path.exists(dev_file):
+            with open(dev_file,'r',encoding = "utf8") as f:
+                dev_res = json.load(f)
+        else:
+            dev_res = {}
+        dev_res[args.dev_cs_len] = float(acc.cpu().numpy())
+        with open(dev_file,'w',encoding = "utf8") as f:
+            json.dump(dev_res,f,indent = 2 ,ensure_ascii = False)
     with open(prediction_file,'w',encoding= 'utf8') as f:
         json.dump(prediction_json,f,indent = 2,ensure_ascii = False)
     return 
