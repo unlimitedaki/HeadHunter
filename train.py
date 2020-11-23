@@ -447,12 +447,12 @@ def eval(args,set_name):
         model = model.to(device)
         if args.fp16:
             model = amp.initialize(model,opt_level = "O1")
-    
+    model.cs_len = args.dev_cs_len
     # Test!
     correct_count, predictions, attention_scores = test_loop_fn(model,dataloader,device,None)
 
     prediction_json = make_predictions(args,examples,predictions,attention_scores,omcs_corpus,set_name)
-    prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.cs_len))
+    prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.dev_cs_len))
     if set_name == "dev":
         logger.info("DEV ACC is {}".format(correct_count/float(len(examples))))
     with open(prediction_file,'w',encoding= 'utf8') as f:
