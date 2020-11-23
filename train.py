@@ -488,6 +488,7 @@ if __name__ == "__main__":
     parser.add_argument("--check_loss_step",default = 400,type = int,help = "output current average loss of training")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--cs_len",type = int, default = 5)
+    parser.add_argument("--dev_cs_len",type = int, default = 5)
     # settings
     parser.add_argument("--n_gpu",type=int , default = 1)
     parser.add_argument("--fp16",action = "store_true")
