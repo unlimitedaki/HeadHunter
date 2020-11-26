@@ -1,5 +1,4 @@
-from tokenizers import Tokenizer, Encoding, AddedToken
-from tokenizers.models import TokenizedSequence, TokenizedSequenceWithOffsets
+from tokenizers import Tokenizer, Encoding, AddedToken, InputSequence, EncodeInput
 
 from typing import List, Union, Tuple, Optional, Dict
 
@@ -26,7 +25,7 @@ class BaseTokenizer:
         return self._tokenizer.num_special_tokens_to_add(is_pair)
 
     def get_vocab(self, with_added_tokens: bool = True) -> Dict[str, int]:
-        """ Returns the vocabulary
+        """Returns the vocabulary
 
         Args:
             with_added_tokens: boolean:
@@ -38,7 +37,7 @@ class BaseTokenizer:
         return self._tokenizer.get_vocab(with_added_tokens=with_added_tokens)
 
     def get_vocab_size(self, with_added_tokens: bool = True) -> int:
-        """ Return the size of vocabulary, with or without added tokens.
+        """Return the size of vocabulary, with or without added tokens.
 
         Args:
             with_added_tokens: (`optional`) bool:
@@ -52,16 +51,22 @@ class BaseTokenizer:
     def enable_padding(
         self,
         direction: Optional[str] = "right",
+        pad_to_multiple_of: Optional[int] = None,
         pad_id: Optional[int] = 0,
         pad_type_id: Optional[int] = 0,
         pad_token: Optional[str] = "[PAD]",
-        max_length: Optional[int] = None,
+        length: Optional[int] = None,
     ):
-        """ Change the padding strategy
+        """Change the padding strategy
 
         Args:
             direction: (`optional`) str:
                 Can be one of: `right` or `left`
+
+            pad_to_multiple_of: (`optional`) unsigned int:
+                If specified, the padding length should always snap to the next multiple of
+                the given value. For example if we were going to pad with a length of 250 but
+                `pad_to_multiple_of=8` then we will pad to 256.
 
             pad_id: (`optional`) unsigned int:
                 The indice to be used when padding
@@ -72,26 +77,37 @@ class BaseTokenizer:
             pad_token: (`optional`) str:
                 The pad token to be used when padding
 
-            max_length: (`optional`) unsigned int:
+            length: (`optional`) unsigned int:
                 If specified, the length at which to pad. If not specified
                 we pad using the size of the longest sequence in a batch
         """
         return self._tokenizer.enable_padding(
             direction=direction,
+            pad_to_multiple_of=pad_to_multiple_of,
             pad_id=pad_id,
             pad_type_id=pad_type_id,
             pad_token=pad_token,
-            max_length=max_length,
+            length=length,
         )
 
     def no_padding(self):
         """ Disable padding """
         return self._tokenizer.no_padding()
 
+    @property
+    def padding(self) -> Optional[dict]:
+        """Get the current padding parameters
+
+        Returns:
+            None if padding is disabled, a dict with the currently set parameters
+            if the padding is enabled.
+        """
+        return self._tokenizer.padding
+
     def enable_truncation(
         self, max_length: int, stride: Optional[int] = 0, strategy: Optional[str] = "longest_first"
     ):
-        """ Change the truncation options
+        """Change the truncation options
 
         Args:
             max_length: unsigned int:
@@ -110,8 +126,18 @@ class BaseTokenizer:
         """ Disable truncation """
         return self._tokenizer.no_truncation()
 
+    @property
+    def truncation(self) -> Optional[dict]:
+        """Get the current truncation parameters
+
+        Returns:
+            None if truncation is disabled, a dict with the current truncation parameters if
+            truncation is enabled
+        """
+        return self._tokenizer.truncation
+
     def add_tokens(self, tokens: List[Union[str, AddedToken]]) -> int:
-        """ Add the given tokens to the vocabulary
+        """Add the given tokens to the vocabulary
 
         Args:
             tokens: List[Union[str, AddedToken]]:
@@ -124,7 +150,7 @@ class BaseTokenizer:
         return self._tokenizer.add_tokens(tokens)
 
     def add_special_tokens(self, special_tokens: List[Union[str, AddedToken]]) -> int:
-        """ Add the given special tokens to the vocabulary, and treat them as special tokens.
+        """Add the given special tokens to the vocabulary, and treat them as special tokens.
 
         The special tokens will never be processed by the model, and will be
         removed while decoding.
@@ -140,7 +166,7 @@ class BaseTokenizer:
         return self._tokenizer.add_special_tokens(special_tokens)
 
     def normalize(self, sequence: str) -> str:
-        """ Normalize the given sequence
+        """Normalize the given sequence
 
         Args:
             sequence: str:
@@ -151,72 +177,27 @@ class BaseTokenizer:
         """
         return self._tokenizer.normalize(sequence)
 
-    def encode_tokenized(
-        self, sequence: Union[TokenizedSequence, TokenizedSequenceWithOffsets], type_id: int = 0
-    ) -> Encoding:
-        """ Encode the given sequence. Let us skip the Normalizer and PreTokenizer by providing
-        already tokenized substrings.
-
-        A sequence can either be:
-            - `TokenizedSequence`: (`List[str]`)
-            - `TokenizedSequenceWithOffsets: (`List[Tuple[str, Offsets]]`) where Offsets is
-            a Tuple[int, int].
-
-        If the Offsets are not provided, they will be automatically generated, making the hypothesis
-        that all the tokens in the `TokenizedSequence` are contiguous in the original string.
-
-        Args:
-            sequence: Union[TokenizedSequence, TokenizedSequenceWithOffsets]
-                Either a TokenizedSequence or a TokenizedSequenceWithOffsets
-
-            type_id: int:
-                The type id of the given sequence
-
-        Returns:
-            An Encoding
-        """
-        return self._tokenizer.model.encode(sequence, type_id)
-
-    def encode_tokenized_batch(
-        self,
-        sequences: Union[List[TokenizedSequence], List[TokenizedSequenceWithOffsets]],
-        type_id: int = 0,
-    ) -> List[Encoding]:
-        """ Encode the given batch of sequence. Let us skip the Normalizer and PreTokenizer by
-        providing already tokenized substrings.
-
-        A sequence can either be:
-            - `TokenizedSequence`: (`List[str]`)
-            - `TokenizedSequenceWithOffsets: (`List[Tuple[str, Offsets]]`) where Offsets is
-            a Tuple[int, int].
-
-        If the Offsets are not provided, they will be automatically generated, making the hypothesis
-        that all the tokens in the `TokenizedSequence` are contiguous in the original string.
-
-        Args:
-            sequences: Union[List[TokenizedSequence], List[TokenizedSequenceWithOffsets]]
-                A list of sequence. Each sequence is either a TokenizedSequence or a
-                TokenizedSequenceWithOffsets
-
-            type_id: int:
-                The type if of the given sequence
-
-        Returns:
-            A list of Encoding
-        """
-        return self._tokenizer.model.encode_batch(sequences, type_id)
-
     def encode(
-        self, sequence: str, pair: Optional[str] = None, add_special_tokens: bool = True
+        self,
+        sequence: InputSequence,
+        pair: Optional[InputSequence] = None,
+        is_pretokenized: bool = False,
+        add_special_tokens: bool = True,
     ) -> Encoding:
-        """ Encode the given sequence
+        """Encode the given sequence and pair. This method can process raw text sequences as well
+        as already pre-tokenized sequences.
 
         Args:
-            sequence: str:
-                The sequence to encode
+            sequence: InputSequence:
+                The sequence we want to encode. This sequence can be either raw text or
+                pre-tokenized, according to the `is_pretokenized` argument:
 
-            pair: (`optional`) Optional[str]:
-                The optional pair sequence
+                - If `is_pretokenized=False`: `InputSequence` is expected to be `str`
+                - If `is_pretokenized=True`: `InputSequence` is expected to be
+                    `Union[List[str], Tuple[str]]`
+
+            is_pretokenized: bool:
+                Whether the input is already pre-tokenized.
 
             add_special_tokens: bool:
                 Whether to add the special tokens while encoding.
@@ -225,19 +206,34 @@ class BaseTokenizer:
             An Encoding
         """
         if sequence is None:
-            raise ValueError("None input is not valid. Should be a string.")
+            raise ValueError("encode: `sequence` can't be `None`")
 
-        return self._tokenizer.encode(sequence, pair, add_special_tokens)
+        return self._tokenizer.encode(sequence, pair, is_pretokenized, add_special_tokens)
 
     def encode_batch(
-        self, sequences: List[Union[str, Tuple[str, str]]], add_special_tokens: bool = True
+        self,
+        inputs: List[EncodeInput],
+        is_pretokenized: bool = False,
+        add_special_tokens: bool = True,
     ) -> List[Encoding]:
-        """ Encode the given sequences or pair of sequences
+        """Encode the given inputs. This method accept both raw text sequences as well as already
+        pre-tokenized sequences.
 
         Args:
-            sequences: List[Union[str, Tuple[str, str]]]:
-                A list of sequences or pair of sequences. The list can contain both
-                at the same time.
+            inputs: List[EncodeInput]:
+                A list of single sequences or pair sequences to encode. Each `EncodeInput` is
+                expected to be of the following form:
+                    `Union[InputSequence, Tuple[InputSequence, InputSequence]]`
+
+                Each `InputSequence` can either be raw text or pre-tokenized,
+                according to the `is_pretokenized` argument:
+
+                - If `is_pretokenized=False`: `InputSequence` is expected to be `str`
+                - If `is_pretokenized=True`: `InputSequence` is expected to be
+                    `Union[List[str], Tuple[str]]`
+
+            is_pretokenized: bool:
+                Whether the input is already pre-tokenized.
 
             add_special_tokens: bool:
                 Whether to add the special tokens while encoding.
@@ -246,15 +242,13 @@ class BaseTokenizer:
             A list of Encoding
         """
 
-        if sequences is None:
-            raise ValueError(
-                "None input is not valid. Should be a list of strings or a list of tuple of strings."
-            )
+        if inputs is None:
+            raise ValueError("encode_batch: `inputs` can't be `None`")
 
-        return self._tokenizer.encode_batch(sequences, add_special_tokens)
+        return self._tokenizer.encode_batch(inputs, is_pretokenized, add_special_tokens)
 
     def decode(self, ids: List[int], skip_special_tokens: Optional[bool] = True) -> str:
-        """ Decode the given list of ids to a string sequence
+        """Decode the given list of ids to a string sequence
 
         Args:
             ids: List[unsigned int]:
@@ -274,7 +268,7 @@ class BaseTokenizer:
     def decode_batch(
         self, sequences: List[List[int]], skip_special_tokens: Optional[bool] = True
     ) -> str:
-        """ Decode the list of sequences to a list of string sequences
+        """Decode the list of sequences to a list of string sequences
 
         Args:
             sequences: List[List[unsigned int]]:
@@ -292,7 +286,7 @@ class BaseTokenizer:
         return self._tokenizer.decode_batch(sequences, skip_special_tokens=skip_special_tokens)
 
     def token_to_id(self, token: str) -> Optional[int]:
-        """ Convert the given token to its corresponding id
+        """Convert the given token to its corresponding id
 
         Args:
             token: str:
@@ -304,7 +298,7 @@ class BaseTokenizer:
         return self._tokenizer.token_to_id(token)
 
     def id_to_token(self, id: int) -> Optional[str]:
-        """ Convert the given token id to its corresponding string
+        """Convert the given token id to its corresponding string
 
         Args:
             token: id:
@@ -315,8 +309,8 @@ class BaseTokenizer:
         """
         return self._tokenizer.id_to_token(id)
 
-    def save(self, directory: str, name: Optional[str] = None):
-        """ Save the current model to the given directory
+    def save_model(self, directory: str, name: Optional[str] = None):
+        """Save the current model to the given directory
 
         Args:
             directory: str:
@@ -327,10 +321,31 @@ class BaseTokenizer:
         """
         return self._tokenizer.model.save(directory, name=name)
 
+    def save(self, path: str, pretty: bool = False):
+        """Save the current Tokenizer at the given path
+
+        Args:
+            path: str:
+                A path to the destination Tokenizer file
+        """
+        return self._tokenizer.save(path, pretty)
+
+    def to_str(self, pretty: bool = False):
+        """Get a serialized JSON version of the Tokenizer as a str
+
+        Args:
+            pretty: bool:
+                Whether the JSON string should be prettified
+
+        Returns:
+            str
+        """
+        return self._tokenizer.to_str(pretty)
+
     def post_process(
         self, encoding: Encoding, pair: Optional[Encoding] = None, add_special_tokens: bool = True
     ) -> Encoding:
-        """ Apply all the post-processing steps to the given encodings.
+        """Apply all the post-processing steps to the given encodings.
 
         The various steps are:
             1. Truncate according to global params (provided to `enable_truncation`)
