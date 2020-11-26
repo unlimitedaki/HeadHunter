@@ -2,14 +2,14 @@ from .. import AddedToken
 from typing import Optional, List, Union
 
 class Trainer:
-    """ Base class for all trainers
+    """Base class for all trainers
 
     This class is not supposed to be instantiated directly. Instead, any implementation of a
     Trainer will return an instance of this class when instantiated.
     """
 
 class BpeTrainer(Trainer):
-    """ BpeTrainer
+    """BpeTrainer
 
     Capable of training a BPE model
     """
@@ -25,7 +25,7 @@ class BpeTrainer(Trainer):
         continuing_subword_prefix: Optional[str] = None,
         end_of_word_suffix: Optional[str] = None,
     ) -> None:
-        """ Instantiate a new BpeTrainer with the given options:
+        """Instantiate a new BpeTrainer with the given options:
 
         Args:
             vocab_size: unsigned int:
@@ -46,7 +46,7 @@ class BpeTrainer(Trainer):
             initial_alphabet: List[str]:
                 A list of characters to include in the initial alphabet, even
                 if not seen in the training dataset.
-                If the strings contains more than one character, only the first one
+                If the strings contain more than one character, only the first one
                 is kept.
 
             continuing_subword_prefix: Optional[str]:
@@ -61,7 +61,7 @@ class BpeTrainer(Trainer):
         pass
 
 class WordPieceTrainer(Trainer):
-    """ WordPieceTrainer
+    """WordPieceTrainer
 
     Capable of training a WordPiece model
     """
@@ -77,7 +77,7 @@ class WordPieceTrainer(Trainer):
         continuing_subword_prefix: Optional[str] = "##",
         end_of_word_suffix: Optional[str] = None,
     ) -> Trainer:
-        """ Instantiate a new WordPieceTrainer with the given options:
+        """Instantiate a new WordPieceTrainer with the given options:
 
         Args:
             vocab_size: unsigned int:
@@ -98,7 +98,7 @@ class WordPieceTrainer(Trainer):
             initial_alphabet: List[str]:
                 A list of characters to include in the initial alphabet, even
                 if not seen in the training dataset.
-                If the strings contains more than one character, only the first one
+                If the strings contain more than one character, only the first one
                 is kept.
 
             continuing_subword_prefix: Optional[str]:
@@ -106,6 +106,41 @@ class WordPieceTrainer(Trainer):
 
             end_of_word_suffix: Optional[str]:
                 A suffix to be used for every subword that is a end-of-word.
+
+        Returns:
+            Trainer
+        """
+        pass
+
+class UnigramTrainer(Trainer):
+    """UnigramTrainer
+
+    Capable of training a Unigram model
+    """
+
+    def __init__(
+        self,
+        vocab_size: int = 8000,
+        show_progress: bool = True,
+        special_tokens: List[Union[str, AddedToken]] = [],
+    ) -> Trainer:
+        """Instantiate a new UnigramTrainer with the given options:
+
+        Args:
+            vocab_size: unsigned int:
+                The size of the final vocabulary, including all tokens and alphabet.
+
+            show_progress: boolean:
+                Whether to show progress bars while training.
+
+            special_tokens: List[Union[str, AddedToken]]:
+                A list of special tokens the model should know of.
+
+            initial_alphabet: List[str]:
+                A list of characters to include in the initial alphabet, even
+                if not seen in the training dataset.
+                If the strings contain more than one character, only the first one
+                is kept.
 
         Returns:
             Trainer

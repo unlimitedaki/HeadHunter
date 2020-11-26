@@ -15,20 +15,28 @@
 # limitations under the License.
 """ GLUE processors and helpers """
 
-import logging
 import os
+import warnings
+from dataclasses import asdict
 from enum import Enum
 from typing import List, Optional, Union
 
 from ...file_utils import is_tf_available
 from ...tokenization_utils import PreTrainedTokenizer
+from ...utils import logging
 from .utils import DataProcessor, InputExample, InputFeatures
 
 
 if is_tf_available():
     import tensorflow as tf
 
-logger = logging.getLogger(__name__)
+logger = logging.get_logger(__name__)
+
+DEPRECATION_WARNING = (
+    "This {0} will be removed from the library soon, preprocessing should be handled with the 🤗 Datasets "
+    "library. You can have a look at this example script for pointers: "
+    "https://github.com/huggingface/transformers/blob/master/examples/text-classification/run_glue.py"
+)
 
 
 def glue_convert_examples_to_features(
@@ -51,11 +59,12 @@ def glue_convert_examples_to_features(
         output_mode: String indicating the output mode. Either ``regression`` or ``classification``
 
     Returns:
-        If the ``examples`` input is a ``tf.data.Dataset``, will return a ``tf.data.Dataset``
-        containing the task-specific features. If the input is a list of ``InputExamples``, will return
-        a list of task-specific ``InputFeatures`` which can be fed to the model.
+        If the ``examples`` input is a ``tf.data.Dataset``, will return a ``tf.data.Dataset`` containing the
+        task-specific features. If the input is a list of ``InputExamples``, will return a list of task-specific
+        ``InputFeatures`` which can be fed to the model.
 
     """
+    warnings.warn(DEPRECATION_WARNING.format("function"), FutureWarning)
     if is_tf_available() and isinstance(examples, tf.data.Dataset):
         if task is None:
             raise ValueError("When calling glue_convert_examples_to_features from TF, the task parameter is required.")
@@ -68,7 +77,10 @@ def glue_convert_examples_to_features(
 if is_tf_available():
 
     def _tf_glue_convert_examples_to_features(
-        examples: tf.data.Dataset, tokenizer: PreTrainedTokenizer, task=str, max_length: Optional[int] = None,
+        examples: tf.data.Dataset,
+        tokenizer: PreTrainedTokenizer,
+        task=str,
+        max_length: Optional[int] = None,
     ) -> tf.data.Dataset:
         """
         Returns:
@@ -78,29 +90,20 @@ if is_tf_available():
         processor = glue_processors[task]()
         examples = [processor.tfds_map(processor.get_example_from_tensor_dict(example)) for example in examples]
         features = glue_convert_examples_to_features(examples, tokenizer, max_length=max_length, task=task)
+        label_type = tf.float32 if task == "sts-b" else tf.int64
 
         def gen():
             for ex in features:
-                yield (
-                    {
-                        "input_ids": ex.input_ids,
-                        "attention_mask": ex.attention_mask,
-                        "token_type_ids": ex.token_type_ids,
-                    },
-                    ex.label,
-                )
+                d = {k: v for k, v in asdict(ex).items() if v is not None}
+                label = d.pop("label")
+                yield (d, label)
+
+        input_names = ["input_ids"] + tokenizer.model_input_names
 
         return tf.data.Dataset.from_generator(
             gen,
-            ({"input_ids": tf.int32, "attention_mask": tf.int32, "token_type_ids": tf.int32}, tf.int64),
-            (
-                {
-                    "input_ids": tf.TensorShape([None]),
-                    "attention_mask": tf.TensorShape([None]),
-                    "token_type_ids": tf.TensorShape([None]),
-                },
-                tf.TensorShape([]),
-            ),
+            ({k: tf.int32 for k in input_names}, label_type),
+            ({k: tf.TensorShape([None]) for k in input_names}, tf.TensorShape([])),
         )
 
 
@@ -137,8 +140,11 @@ def _glue_convert_examples_to_features(
 
     labels = [label_from_example(example) for example in examples]
 
-    batch_encoding = tokenizer.batch_encode_plus(
-        [(example.text_a, example.text_b) for example in examples], max_length=max_length, pad_to_max_length=True,
+    batch_encoding = tokenizer(
+        [(example.text_a, example.text_b) for example in examples],
+        max_length=max_length,
+        padding="max_length",
+        truncation=True,
     )
 
     features = []
@@ -163,6 +169,10 @@ class OutputMode(Enum):
 
 class MrpcProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
 
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
@@ -207,6 +217,10 @@ class MrpcProcessor(DataProcessor):
 class MnliProcessor(DataProcessor):
     """Processor for the MultiNLI data set (GLUE version)."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
+
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
         return InputExample(
@@ -249,6 +263,10 @@ class MnliProcessor(DataProcessor):
 class MnliMismatchedProcessor(MnliProcessor):
     """Processor for the MultiNLI Mismatched data set (GLUE version)."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
+
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(self._read_tsv(os.path.join(data_dir, "dev_mismatched.tsv")), "dev_mismatched")
@@ -260,6 +278,10 @@ class MnliMismatchedProcessor(MnliProcessor):
 
 class ColaProcessor(DataProcessor):
     """Processor for the CoLA data set (GLUE version)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
 
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
@@ -304,6 +326,10 @@ class ColaProcessor(DataProcessor):
 class Sst2Processor(DataProcessor):
     """Processor for the SST-2 data set (GLUE version)."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
+
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
         return InputExample(
@@ -346,6 +372,10 @@ class Sst2Processor(DataProcessor):
 class StsbProcessor(DataProcessor):
     """Processor for the STS-B data set (GLUE version)."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
+
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
         return InputExample(
@@ -387,6 +417,10 @@ class StsbProcessor(DataProcessor):
 
 class QqpProcessor(DataProcessor):
     """Processor for the QQP data set (GLUE version)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
 
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
@@ -436,6 +470,10 @@ class QqpProcessor(DataProcessor):
 class QnliProcessor(DataProcessor):
     """Processor for the QNLI data set (GLUE version)."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
+
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
         return InputExample(
@@ -478,6 +516,10 @@ class QnliProcessor(DataProcessor):
 class RteProcessor(DataProcessor):
     """Processor for the RTE data set (GLUE version)."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
+
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
         return InputExample(
@@ -519,6 +561,10 @@ class RteProcessor(DataProcessor):
 
 class WnliProcessor(DataProcessor):
     """Processor for the WNLI data set (GLUE version)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        warnings.warn(DEPRECATION_WARNING.format("processor"), FutureWarning)
 
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
