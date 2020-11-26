@@ -63,11 +63,30 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
+class SequenceSummaryLayer(nn.Module):
+    def __init__(self,hidden_size,summary_layers):
+        super().__init__()
+        self.summary_layers = summary_layers
+        self.linear = nn.Linear(hidden_size * summary_layers, hidden_size)
+        # do pooler just as transformers did
+        self.pooler = nn.Linear(hidden_size, hidden_size)
+        self.pooler_activation = nn.Tanh()
+    def forward(self, x):
+        stacked_hidden_states = torch.stack(list(x[-self.summary_layers:]),dim = -2)
+        # print(stacked_hidden_states.shape)
+        stacked_hidden_states = stacked_hidden_states[:,0]
+        # pdb.set_trace()
+        concat_hidden_states = stacked_hidden_states.view(stacked_hidden_states.shape[0],stacked_hidden_states.shape[-2]*stacked_hidden_states.shape[-1])
+        resized_hidden_states = self.linear(concat_hidden_states)
+        pooled_hidden_states = self.pooler_activation(self.pooler(resized_hidden_states))
+        return pooled_hidden_states
+
 class AlbertForMultipleChoice(AlbertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
         self.albert = AlbertModel(config)
+        self.sequence_summary = SequenceSummaryLayer(config.hidden_size,4)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, 1)
 
@@ -104,11 +123,14 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             head_mask=head_mask,
-            inputs_embeds=inputs_embeds
+            inputs_embeds=inputs_embeds,
+            output_hidden_states = True
         )
-        pooled_output = outputs[1]
-
+        # pooled_output = outputs[1]
+        hidden_output = outputs[2]
+        pooled_output = self.sequence_summary(outputs[2])
         pooled_output = self.dropout(pooled_output)
+        
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
 
@@ -294,15 +316,17 @@ class BertAttRanker(BertPreTrainedModel):
 
         pooled_output = bert_outputs[1]
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
-        # self attention
+
         atten_output,attention_scores = self.self_att(reshaped_output)
         attention_scores = attention_scores.view(batch_size,num_choices,-1)
         # attention summary 
-        reshaped_output = reshaped_output.view(batch_size,num_choices,self.cs_len,-1)
+        atten_output = atten_output.view(batch_size,num_choices,self.cs_len,-1)
         attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(2)
-        reshaped_output = torch.tanh(torch.matmul(attention_scores,reshaped_output)).squeeze(2)
+        atten_output = torch.tanh(torch.matmul(attention_scores,atten_output)).squeeze(2)
 
-        logits = self.classifier(reshaped_output)
+        # reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
+
+        logits = self.classifier(atten_output)
         reshaped_logits = logits.view(-1, num_choices)
         
         outputs = (reshaped_logits,attention_scores)
@@ -377,7 +401,7 @@ class AlbertAttRanker(AlbertPreTrainedModel):
         self.albert = AlbertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.self_att = SelfAttention(config)
-        self.classifier = nn.Linear(config.hidden_size,1)
+        self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
 
@@ -419,14 +443,10 @@ class AlbertAttRanker(AlbertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
         
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
-        # self attention
+
         atten_output,attention_scores = self.self_att(reshaped_output)
         attention_scores = attention_scores.view(batch_size,num_choices,-1)
-        # attention summary 
-        reshaped_output = reshaped_output.view(batch_size,num_choices,self.cs_len,-1)
-        attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(2)
-        reshaped_output = torch.tanh(torch.matmul(attention_scores,reshaped_output)).squeeze(2)
-
+        reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
         logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
         outputs = (reshaped_logits,attention_scores)
