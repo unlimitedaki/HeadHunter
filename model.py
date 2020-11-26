@@ -63,11 +63,30 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
+class SequenceSummaryLayer(nn.Module):
+    def __init__(self,hidden_size,summary_layers):
+        super().__init__()
+        self.summary_layers = summary_layers
+        self.linear = nn.Linear(hidden_size * summary_layers, hidden_size)
+        # do pooler just as transformers did
+        self.pooler = nn.Linear(hidden_size, hidden_size)
+        self.pooler_activation = nn.Tanh()
+    def forward(self, x):
+        stacked_hidden_states = torch.stack(list(x[-self.summary_layers:]),dim = -2)
+        # print(stacked_hidden_states.shape)
+        stacked_hidden_states = stacked_hidden_states[:,0]
+        # pdb.set_trace()
+        concat_hidden_states = stacked_hidden_states.view(stacked_hidden_states.shape[0],stacked_hidden_states.shape[-2]*stacked_hidden_states.shape[-1])
+        resized_hidden_states = self.linear(concat_hidden_states)
+        pooled_hidden_states = self.pooler_activation(self.pooler(resized_hidden_states))
+        return pooled_hidden_states
+
 class AlbertForMultipleChoice(AlbertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
         self.albert = AlbertModel(config)
+        self.sequence_summary = SequenceSummaryLayer(config.hidden_size,4)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, 1)
 
@@ -104,11 +123,14 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             head_mask=head_mask,
-            inputs_embeds=inputs_embeds
+            inputs_embeds=inputs_embeds,
+            output_hidden_states = True
         )
-        pooled_output = outputs[1]
-
+        # pooled_output = outputs[1]
+        hidden_output = outputs[2]
+        pooled_output = self.sequence_summary(outputs[2])
         pooled_output = self.dropout(pooled_output)
+        
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
 
