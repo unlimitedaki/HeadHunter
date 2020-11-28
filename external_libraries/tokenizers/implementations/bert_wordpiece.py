@@ -5,7 +5,7 @@ from tokenizers.pre_tokenizers import BertPreTokenizer
 from tokenizers.processors import BertProcessing
 from .base_tokenizer import BaseTokenizer
 
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict
 
 
 class BertWordPieceTokenizer(BaseTokenizer):
@@ -13,7 +13,7 @@ class BertWordPieceTokenizer(BaseTokenizer):
 
     def __init__(
         self,
-        vocab_file: Optional[str] = None,
+        vocab: Optional[Union[str, Dict[str, int]]] = None,
         unk_token: Union[str, AddedToken] = "[UNK]",
         sep_token: Union[str, AddedToken] = "[SEP]",
         cls_token: Union[str, AddedToken] = "[CLS]",
@@ -21,15 +21,15 @@ class BertWordPieceTokenizer(BaseTokenizer):
         mask_token: Union[str, AddedToken] = "[MASK]",
         clean_text: bool = True,
         handle_chinese_chars: bool = True,
-        strip_accents: bool = True,
+        strip_accents: Optional[bool] = None,
         lowercase: bool = True,
         wordpieces_prefix: str = "##",
     ):
 
-        if vocab_file is not None:
-            tokenizer = Tokenizer(WordPiece(vocab_file, unk_token=str(unk_token)))
+        if vocab is not None:
+            tokenizer = Tokenizer(WordPiece(vocab, unk_token=str(unk_token)))
         else:
-            tokenizer = Tokenizer(WordPiece())
+            tokenizer = Tokenizer(WordPiece(unk_token=str(unk_token)))
 
         # Let the tokenizer know about special tokens if they are part of the vocab
         if tokenizer.token_to_id(str(unk_token)) is not None:
@@ -51,7 +51,7 @@ class BertWordPieceTokenizer(BaseTokenizer):
         )
         tokenizer.pre_tokenizer = BertPreTokenizer()
 
-        if vocab_file is not None:
+        if vocab is not None:
             sep_token_id = tokenizer.token_to_id(str(sep_token))
             if sep_token_id is None:
                 raise TypeError("sep_token not found in the vocabulary")
@@ -79,6 +79,10 @@ class BertWordPieceTokenizer(BaseTokenizer):
         }
 
         super().__init__(tokenizer, parameters)
+
+    def from_file(vocab: str, **kwargs):
+        vocab = WordPiece.read_file(vocab)
+        return BertWordPieceTokenizer(vocab, **kwargs)
 
     def train(
         self,

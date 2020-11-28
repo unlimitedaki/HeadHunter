@@ -22,6 +22,7 @@ from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenize
 from transformers import AdamW,get_linear_schedule_with_warmup
 from transformers.modeling_utils import SequenceSummary
 
+# print(transformers.__version__)
 # self build
 from processor import *
 from model import *
