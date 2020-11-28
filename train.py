@@ -135,6 +135,8 @@ def train(args):
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
+    logger.setLevel(logging.INFO)
+    logger.info("Logger Level: INFO")
     # freeze seed
     if args.seed:
         set_seed(args)
@@ -317,7 +319,7 @@ def train(args):
     for epoch in range(0,args.num_train_epochs):
         logger.info("Epoch: {}".format(str(epoch)))
         if args.tpu:
-            # model_parallel(train_loop_fn, train_dataloader)
+            model_parallel(train_loop_fn, train_dataloader)
             results = model_parallel(test_loop_fn, dev_dataloader)
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
@@ -330,7 +332,7 @@ def train(args):
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
         # save model, save status 
-        pdb.set_trace()
+        # pdb.set_trace()
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
         
