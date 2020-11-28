@@ -278,6 +278,7 @@ def feature_padding(args,
             all_labels = torch.cat((all_labels,torch.tensor([all_labels[i] for i in padding_index],dtype=torch.long)),0)
         
     assert len(all_input_ids) == target_number
+    print("{} set is padded to {} examples".format(data_type,str(target_number)))
     return all_input_ids, all_attention_masks, all_token_type_ids, all_labels
 
 

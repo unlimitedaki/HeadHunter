@@ -193,27 +193,25 @@ def train(args):
     t_total = train_step // args.gradient_accumulation_steps * args.num_train_epochs // device_num
     optimizer = None
     scheduler = None
-    def train_loop_fn(model,loader,device,context):
+    def train_loop_fn(model,loader,device,context,in_optimizer = None, in_scheduler = None):
         nonlocal t_total,train_step,device_num 
         # t_total = len(loader) * args.num_train_epochs
         if not args.tpu :
-            nonlocal optimizer, scheduler
-            # don't need to init optimizer every epoch if not using tpu
-            if not optimizer:
-                no_decay = ["bias", "LayerNorm.weight"]
-                optimizer_grouped_parameters = [
-                    {
-                        "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                        "weight_decay": args.weight_decay,
-                    },
-                    {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-                ]
-                optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-                scheduler = get_linear_schedule_with_warmup(
-                    optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-                )
-                if args.fp16:
-                    model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+            optimizer = in_optimizer
+            scheduler = in_scheduler
+        else:
+            no_decay = ["bias", "LayerNorm.weight"]
+            optimizer_grouped_parameters = [
+                {
+                    "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                    "weight_decay": args.weight_decay,
+                },
+                {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+            ]
+            optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+            )
 
         model.zero_grad()
         tr_loss = 0.0
@@ -293,7 +291,21 @@ def train(args):
             "best_epoch" : -1,
             "best_Acc" : 0.0
         }
-    
+    if not args.tpu:
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                "weight_decay": args.weight_decay,
+            },
+            {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        ]
+        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+        )
+        if args.fp16:
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
     status = init_status()
     model = select_model(args)
     if args.tpu:
@@ -305,19 +317,20 @@ def train(args):
     for epoch in range(0,args.num_train_epochs):
         logger.info("Epoch: {}".format(str(epoch)))
         if args.tpu:
-            model_parallel(train_loop_fn, train_dataloader)
+            # model_parallel(train_loop_fn, train_dataloader)
             results = model_parallel(test_loop_fn, dev_dataloader)
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
+            attention_scores = [i for item in results for i in item[2]]
             model = model_parallel.models[0]
             acc = correct_count / len(dev_examples)
         else:
-            train_loop_fn(model,train_dataloader,device,None)
+            train_loop_fn(model,train_dataloader,device,None,in_optimizer = optimizer,in_scheduler = scheduler)
             correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
         # save model, save status 
-        
+        pdb.set_trace()
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
         
@@ -502,7 +515,7 @@ if __name__ == "__main__":
     parser.add_argument("--check_loss_step",default = 400,type = int,help = "output current average loss of training")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--cs_len",type = int, default = 5)
-    parser.add_argument("--dev_cs_len",type = int, default = 5)
+    parser.add_argument("--dev_cs_len",type = int, default = 0)
     # settings
     parser.add_argument("--n_gpu",type=int , default = 1)
     parser.add_argument("--fp16",action = "store_true")
