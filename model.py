@@ -138,7 +138,7 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(reshaped_logits, labels)
-        output = (reshaped_logits,) + outputs[2:]
+        output = (reshaped_logits,)
         return ((loss,) + output) if loss is not None else output
 
 

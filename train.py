@@ -261,8 +261,8 @@ def train(args):
         attention_scores = []
         total_test_items = 0
         with torch.no_grad():
-            # iterator = tqdm(enumerate(loader))
-            for step,batch in enumerate(loader):
+            for step, batch in tqdm(enumerate(loader)):
+            # for step,batch in enumerate(loader):
                 model.eval()
                 batch = tuple(t.to(device) for t in batch)
                 inputs = {
@@ -278,6 +278,7 @@ def train(args):
                     attention_scores += attention_score
                 prediction = torch.argmax(logits,axis = 1)
                 correct_count += (prediction == inputs["labels"]).sum().float()
+                
                 predictions += prediction.cpu().numpy().tolist()
                 total_test_items += batch[0].shape[0]
         # logger.info("test_items of device[{}] is {}".format(device,str(total_test_items)))
