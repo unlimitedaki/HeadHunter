@@ -198,10 +198,30 @@ def train(args):
     def train_loop_fn(model,loader,device,context,in_optimizer = None, in_scheduler = None):
         nonlocal t_total,train_step,device_num 
         # t_total = len(loader) * args.num_train_epochs
+        # if not args.tpu :
+        #     optimizer = in_optimizer
+        #     scheduler = in_scheduler
         if not args.tpu :
-            optimizer = in_optimizer
-            scheduler = in_scheduler
+            nonlocal optimizer, scheduler
+            # don't need to init optimizer every epoch if not using tpu
+            # if not optimizer:
+            #     no_decay = ["bias", "LayerNorm.weight"]
+            #     optimizer_grouped_parameters = [
+            #         {
+            #             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            #             "weight_decay": args.weight_decay,
+            #         },
+            #         {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+            #     ]
+            #     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+            #     scheduler = get_linear_schedule_with_warmup(
+            #         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+            #     )
+            #     if args.fp16:
+            #         model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+
         else:
+            logger.info("init optimizer inside train loop while using tpu")
             no_decay = ["bias", "LayerNorm.weight"]
             optimizer_grouped_parameters = [
                 {
@@ -293,7 +313,18 @@ def train(args):
             "best_epoch" : -1,
             "best_Acc" : 0.0
         }
+    
+    status = init_status()
+    model = select_model(args)
+    
+    if args.tpu:
+        model_parallel = dp.DataParallel(model, device_ids=devices)
+    else:
+        device = torch.device('cuda:0')
+        model = model.to(device)
+
     if not args.tpu:
+        logger.info("init optimizer outside train loop while using gpu")
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
             {
@@ -308,13 +339,8 @@ def train(args):
         )
         if args.fp16:
             model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
-    status = init_status()
-    model = select_model(args)
-    if args.tpu:
-        model_parallel = dp.DataParallel(model, device_ids=devices)
-    else:
-        device = torch.device('cuda:0')
-        model = model.to(device)
+
+    
 
     for epoch in range(0,args.num_train_epochs):
         logger.info("Epoch: {}".format(str(epoch)))
@@ -325,9 +351,12 @@ def train(args):
             predictions = [i for item in results for i in item[1]]
             attention_scores = [i for item in results for i in item[2]]
             model = model_parallel.models[0]
+            predictions,attention_scores = truncate_prediction(len(dev_examples),predictions,attention_scores)
+            acc = correct_count / len(dev_examples)
             acc = correct_count / len(dev_examples)
         else:
-            train_loop_fn(model,train_dataloader,device,None,in_optimizer = optimizer,in_scheduler = scheduler)
+            # train_loop_fn(model,train_dataloader,device,in_optimizer = optimizer,in_scheduler = scheduler)
+            train_loop_fn(model,train_dataloader,device,None)
             correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
@@ -361,6 +390,10 @@ def train(args):
         status_dir = os.path.join(output_dir,"status.json")
         json.dump(status,open(status_dir,'w',encoding = 'utf8'))
 
+def truncate_prediction(num_example,predictions,attention_scores,is_training = True):
+    predictions = predictions[:num_example]
+    attention_scores = attention_scores[:num_example]
+    return predictions, attention_scores
 
 def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data_type="dev"):
     cs_len = args.dev_cs_len
