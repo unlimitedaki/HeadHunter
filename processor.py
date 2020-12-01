@@ -293,12 +293,12 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
         file_name = os.path.join(args.data_dir,args.test_file)
     else :
         file_name = os.path.join(args.data_dir,args.train_file)
-    cache_dir = os.path.join(args.output_dir,"feature_cache")
-    cache_name = "cached_{}_{}_{}_{}".format(data_type,args.cs_mode,args.task_name,args.cs_len)
-    cache_path = os.path.join(cache_dir,cache_name)
-    print(cache_path)
+    # cache_dir = os.path.join(args.output_dir,"feature_cache")
+    # cache_name = "cached_{}_{}_{}_{}".format(data_type,args.cs_mode,args.task_name,args.cs_len)
+    # cache_path = os.path.join(cache_dir,cache_name)
+    # print(cache_path)
     # if not os.path.exists(cache_path):
-        
+    
     if "rerank_csqa" in args.task_name:
         processor = CSQARankerProcessor()
         max_length = args.max_length
@@ -313,7 +313,10 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     with open(cs_result_path,'r',encoding='utf8') as f:
         cs_data = json.load(f)
     if args.cs_len > 0:
-        examples = put_in_cs(examples,cs_data,omcs_corpus,args.cs_len)
+        if data_type == "dev" or data_type == "test":
+            examples = put_in_cs(examples,cs_data,omcs_corpus,args.dev_cs_len)
+        else:
+            examples = put_in_cs(examples,cs_data,omcs_corpus,args.cs_len)
 
     features = processor.convert_examples_to_features(tokenizer,examples,max_length,is_training)
     

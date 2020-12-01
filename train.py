@@ -86,7 +86,7 @@ def select_model(args,model_name = None):
         model_name = args.origin_model
         cache = os.path.join(args.output_dir,"cache")
     else:
-        cache = model_name
+        cache = None
     if args.task_name == "rerank_csqa":
         if "albert" in model_name:
             return AlbertAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
