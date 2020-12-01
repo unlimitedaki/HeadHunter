@@ -2,14 +2,14 @@ cd /content/rerank_CSQA/
 for i in {1..20}
 do
     python train.py \
-        --task_name "rerank_csqa" \
-        --save_model_name $2 \
+        --task_name $1 \
+        --save_model_name $3 \
         --origin_model "bert-base-cased" \
         --cs_mode "QAconcept-Match" \
         --learning_rate 2e-5 \
         --cs_len 7 \
         --dev_cs_len $i \
-        --output_dir $1 \
+        --output_dir $2 \
         --num_train_epochs 5 \
         --train_batch_size 4 \
         --eval_batch_size 2 \
