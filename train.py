@@ -198,28 +198,11 @@ def train(args):
     def train_loop_fn(model,loader,device,context,in_optimizer = None, in_scheduler = None):
         nonlocal t_total,train_step,device_num 
         # t_total = len(loader) * args.num_train_epochs
-        # if not args.tpu :
-        #     optimizer = in_optimizer
-        #     scheduler = in_scheduler
         if not args.tpu :
-            nonlocal optimizer, scheduler
-            # don't need to init optimizer every epoch if not using tpu
-            # if not optimizer:
-            #     no_decay = ["bias", "LayerNorm.weight"]
-            #     optimizer_grouped_parameters = [
-            #         {
-            #             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-            #             "weight_decay": args.weight_decay,
-            #         },
-            #         {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-            #     ]
-            #     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-            #     scheduler = get_linear_schedule_with_warmup(
-            #         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-            #     )
-            #     if args.fp16:
-            #         model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
-
+            optimizer = in_optimizer
+            scheduler = in_scheduler
+        # if not args.tpu :
+        #     nonlocal optimizer, scheduler
         else:
             logger.info("init optimizer inside train loop while using tpu")
             no_decay = ["bias", "LayerNorm.weight"]
@@ -345,14 +328,19 @@ def train(args):
     for epoch in range(0,args.num_train_epochs):
         logger.info("Epoch: {}".format(str(epoch)))
         if args.tpu:
-            model_parallel(train_loop_fn, train_dataloader)
+            # model_parallel(train_loop_fn, train_dataloader)
             results = model_parallel(test_loop_fn, dev_dataloader)
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
             attention_scores = [i for item in results for i in item[2]]
-            model = model_parallel.models[0]
+            # save the model in cpu way
+            import copy
+            model = copy.deepcopy(model_parallel.models[0])
+            # model = type(model_parallel.models[0])()
+            # model.load_state_dict(model_parallel.models[0].state_dict())
+            # model = model_parallel.models[0]
+            model = model.cpu()
             predictions,attention_scores = truncate_prediction(len(dev_examples),predictions,attention_scores)
-            acc = correct_count / len(dev_examples)
             acc = correct_count / len(dev_examples)
         else:
             # train_loop_fn(model,train_dataloader,device,in_optimizer = optimizer,in_scheduler = scheduler)
