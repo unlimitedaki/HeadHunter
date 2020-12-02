@@ -328,7 +328,7 @@ def train(args):
     for epoch in range(0,args.num_train_epochs):
         logger.info("Epoch: {}".format(str(epoch)))
         if args.tpu:
-            # model_parallel(train_loop_fn, train_dataloader)
+            model_parallel(train_loop_fn, train_dataloader)
             results = model_parallel(test_loop_fn, dev_dataloader)
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
@@ -343,8 +343,8 @@ def train(args):
             predictions,attention_scores = truncate_prediction(len(dev_examples),predictions,attention_scores)
             acc = correct_count / len(dev_examples)
         else:
-            # train_loop_fn(model,train_dataloader,device,in_optimizer = optimizer,in_scheduler = scheduler)
-            train_loop_fn(model,train_dataloader,device,None)
+            train_loop_fn(model,train_dataloader,device,in_optimizer = optimizer,in_scheduler = scheduler)
+            # train_loop_fn(model,train_dataloader,device,None)
             correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
