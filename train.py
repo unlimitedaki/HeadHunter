@@ -22,6 +22,7 @@ from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenize
 from transformers import AdamW,get_linear_schedule_with_warmup
 from transformers.modeling_utils import SequenceSummary
 
+# print(transformers.__version__)
 # self build
 from processor import *
 from model import *
@@ -85,7 +86,7 @@ def select_model(args,model_name = None):
         model_name = args.origin_model
         cache = os.path.join(args.output_dir,"cache")
     else:
-        cache = model_name
+        cache = None
     if args.task_name == "rerank_csqa":
         if "albert" in model_name:
             return AlbertAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
@@ -97,7 +98,7 @@ def select_model(args,model_name = None):
             return XLNetAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
     elif args.task_name == "rerank_csqa_without_rerank":
         if "bert" in model_name:
-            return BertAttRankerDontRank.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
+            return BertCSmean.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
     else:
         if "albert" in model_name:
             return AlbertForMultipleChoice.from_pretrained(model_name,cache_dir = cache)
@@ -134,6 +135,8 @@ def train(args):
     fh = logging.FileHandler(os.path.join(output_dir,logfilename), mode='a', encoding='utf-8')
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
+    logger.setLevel(logging.INFO)
+    logger.info("Logger Level: INFO")
     # freeze seed
     if args.seed:
         set_seed(args)
@@ -192,27 +195,28 @@ def train(args):
     t_total = train_step // args.gradient_accumulation_steps * args.num_train_epochs // device_num
     optimizer = None
     scheduler = None
-    def train_loop_fn(model,loader,device,context):
+    def train_loop_fn(model,loader,device,context,in_optimizer = None, in_scheduler = None):
         nonlocal t_total,train_step,device_num 
         # t_total = len(loader) * args.num_train_epochs
         if not args.tpu :
-            nonlocal optimizer, scheduler
-            # don't need to init optimizer every epoch if not using tpu
-            if not optimizer:
-                no_decay = ["bias", "LayerNorm.weight"]
-                optimizer_grouped_parameters = [
-                    {
-                        "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-                        "weight_decay": args.weight_decay,
-                    },
-                    {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-                ]
-                optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-                scheduler = get_linear_schedule_with_warmup(
-                    optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
-                )
-                if args.fp16:
-                    model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+            optimizer = in_optimizer
+            scheduler = in_scheduler
+        # if not args.tpu :
+        #     nonlocal optimizer, scheduler
+        else:
+            logger.info("init optimizer inside train loop while using tpu")
+            no_decay = ["bias", "LayerNorm.weight"]
+            optimizer_grouped_parameters = [
+                {
+                    "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                    "weight_decay": args.weight_decay,
+                },
+                {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+            ]
+            optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+            )
 
         model.zero_grad()
         tr_loss = 0.0
@@ -260,8 +264,8 @@ def train(args):
         attention_scores = []
         total_test_items = 0
         with torch.no_grad():
-            # iterator = tqdm(enumerate(loader))
-            for step,batch in enumerate(loader):
+            for step, batch in tqdm(enumerate(loader)):
+            # for step,batch in enumerate(loader):
                 model.eval()
                 batch = tuple(t.to(device) for t in batch)
                 inputs = {
@@ -277,6 +281,7 @@ def train(args):
                     attention_scores += attention_score
                 prediction = torch.argmax(logits,axis = 1)
                 correct_count += (prediction == inputs["labels"]).sum().float()
+                
                 predictions += prediction.cpu().numpy().tolist()
                 total_test_items += batch[0].shape[0]
         # logger.info("test_items of device[{}] is {}".format(device,str(total_test_items)))
@@ -294,11 +299,31 @@ def train(args):
     
     status = init_status()
     model = select_model(args)
+    
     if args.tpu:
         model_parallel = dp.DataParallel(model, device_ids=devices)
     else:
         device = torch.device('cuda:0')
         model = model.to(device)
+
+    if not args.tpu:
+        logger.info("init optimizer outside train loop while using gpu")
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+                "weight_decay": args.weight_decay,
+            },
+            {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        ]
+        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+        )
+        if args.fp16:
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O1") 
+
+    
 
     for epoch in range(0,args.num_train_epochs):
         logger.info("Epoch: {}".format(str(epoch)))
@@ -307,15 +332,24 @@ def train(args):
             results = model_parallel(test_loop_fn, dev_dataloader)
             correct_count = sum([float(item[0]) for item in results])
             predictions = [i for item in results for i in item[1]]
-            model = model_parallel.models[0]
+            attention_scores = [i for item in results for i in item[2]]
+            # save the model in cpu way
+            import copy
+            model = copy.deepcopy(model_parallel.models[0])
+            # model = type(model_parallel.models[0])()
+            # model.load_state_dict(model_parallel.models[0].state_dict())
+            # model = model_parallel.models[0]
+            model = model.cpu()
+            predictions,attention_scores = truncate_prediction(len(dev_examples),predictions,attention_scores)
             acc = correct_count / len(dev_examples)
         else:
-            train_loop_fn(model,train_dataloader,device,None)
+            train_loop_fn(model,train_dataloader,device,in_optimizer = optimizer,in_scheduler = scheduler)
+            # train_loop_fn(model,train_dataloader,device,None)
             correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
         # save model, save status 
-        
+        # pdb.set_trace()
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
         prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
         
@@ -344,8 +378,13 @@ def train(args):
         status_dir = os.path.join(output_dir,"status.json")
         json.dump(status,open(status_dir,'w',encoding = 'utf8'))
 
+def truncate_prediction(num_example,predictions,attention_scores,is_training = True):
+    predictions = predictions[:num_example]
+    attention_scores = attention_scores[:num_example]
+    return predictions, attention_scores
 
 def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data_type="dev"):
+    cs_len = args.dev_cs_len
     cs_file = "OMCS/{}_{}_omcs_of_dataset.json".format(data_type,args.cs_mode)
     with open(cs_file,'r',encoding="utf8") as f:
         cs_data = json.load(f)
@@ -362,9 +401,9 @@ def make_predictions(args,examples,predictions,attention_scores,omcs_corpus,data
         result_json[example.id]['endings'] = example_cs['endings']
         for j,ending in enumerate(result_json[example.id]['endings']):
             if args.cs_save_mode == 'id':
-                ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:args.cs_len]]
+                ending["cs"] = [omcs_corpus[int(id)] for id in ending["cs"][:cs_len]]
             else:
-                ending['cs'] = ending["cs"][:args.cs_len]
+                ending['cs'] = ending["cs"][:cs_len]
             if attention_scores != []:
                 # some baseline model won't output any attention score. 
                 ending["attention_scores"] = attention_scores[i][j]
@@ -447,14 +486,25 @@ def eval(args,set_name):
         model = model.to(device)
         if args.fp16:
             model = amp.initialize(model,opt_level = "O1")
-    
+    model.cs_len = args.dev_cs_len
     # Test!
     correct_count, predictions, attention_scores = test_loop_fn(model,dataloader,device,None)
 
     prediction_json = make_predictions(args,examples,predictions,attention_scores,omcs_corpus,set_name)
-    prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.cs_len))
+    prediction_file = os.path.join(best_model_dir,"{}_{}_{}_prediction_file.json".format(set_name,args.cs_mode,args.dev_cs_len))
     if set_name == "dev":
-        logger.info("DEV ACC is {}".format(correct_count/float(len(examples))))
+        acc = correct_count/float(len(examples))
+        logger.info("DEV ACC is {}".format(acc))
+    
+        dev_file = os.path.join(output_dir,"dev_res.json")
+        if os.path.exists(dev_file):
+            with open(dev_file,'r',encoding = "utf8") as f:
+                dev_res = json.load(f)
+        else:
+            dev_res = {}
+        dev_res[args.dev_cs_len] = float(acc.cpu().numpy())
+        with open(dev_file,'w',encoding = "utf8") as f:
+            json.dump(dev_res,f,indent = 2 ,ensure_ascii = False)
     with open(prediction_file,'w',encoding= 'utf8') as f:
         json.dump(prediction_json,f,indent = 2,ensure_ascii = False)
     return 
@@ -488,6 +538,7 @@ if __name__ == "__main__":
     parser.add_argument("--check_loss_step",default = 400,type = int,help = "output current average loss of training")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--cs_len",type = int, default = 5)
+    parser.add_argument("--dev_cs_len",type = int, default = 0)
     # settings
     parser.add_argument("--n_gpu",type=int , default = 1)
     parser.add_argument("--fp16",action = "store_true")

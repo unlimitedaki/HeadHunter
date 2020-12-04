@@ -4237,6 +4237,16 @@ thing
         self.assertEqual(regex.search(r"\b(?e)(?:\d{6,20}){i<=5:[\-\\\/]}\b",
           "cat dog starting at 00:01132.000. hello world"), None)
 
+        # Git issue 385: Comments in expressions
+        self.assertEqual(bool(regex.compile('(?#)')), True)
+        self.assertEqual(bool(regex.compile('(?x)(?#)')), True)
+
+        # Git issue 394: Unexpected behaviour in fuzzy matching with limited character set with IGNORECASE flag
+        self.assertEqual(regex.findall(r'(\d+){i<=2:[ab]}', '123X4Y5'),
+          ['123', '4', '5'])
+        self.assertEqual(regex.findall(r'(?i)(\d+){i<=2:[ab]}', '123X4Y5'),
+          ['123', '4', '5'])
+
     def test_fuzzy_ext(self):
         self.assertEqual(bool(regex.fullmatch(r'(?r)(?:a){e<=1:[a-z]}', 'e')),
           True)

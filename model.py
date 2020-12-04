@@ -54,7 +54,7 @@ class BertForMultipleChoice(BertPreTrainedModel):
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
 
-        outputs = (reshaped_logits,) + outputs[2:]  # add hidden states and attention if they are here
+        outputs = (reshaped_logits,)  # add hidden states and attention if they are here
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
@@ -63,11 +63,30 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
+class SequenceSummaryLayer(nn.Module):
+    def __init__(self,hidden_size,summary_layers):
+        super().__init__()
+        self.summary_layers = summary_layers
+        self.linear = nn.Linear(hidden_size * summary_layers, hidden_size)
+        # do pooler just as transformers did
+        self.pooler = nn.Linear(hidden_size, hidden_size)
+        self.pooler_activation = nn.Tanh()
+    def forward(self, x):
+        stacked_hidden_states = torch.stack(list(x[-self.summary_layers:]),dim = -2)
+        # print(stacked_hidden_states.shape)
+        stacked_hidden_states = stacked_hidden_states[:,0]
+        # pdb.set_trace()
+        concat_hidden_states = stacked_hidden_states.view(stacked_hidden_states.shape[0],stacked_hidden_states.shape[-2]*stacked_hidden_states.shape[-1])
+        resized_hidden_states = self.linear(concat_hidden_states)
+        pooled_hidden_states = self.pooler_activation(self.pooler(resized_hidden_states))
+        return pooled_hidden_states
+
 class AlbertForMultipleChoice(AlbertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
         self.albert = AlbertModel(config)
+        self.sequence_summary = SequenceSummaryLayer(config.hidden_size,4)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, 1)
 
@@ -104,11 +123,14 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             head_mask=head_mask,
-            inputs_embeds=inputs_embeds
+            inputs_embeds=inputs_embeds,
+            output_hidden_states = True
         )
-        pooled_output = outputs[1]
-
+        # pooled_output = outputs[1]
+        hidden_output = outputs[2]
+        pooled_output = self.sequence_summary(outputs[2])
         pooled_output = self.dropout(pooled_output)
+        
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
 
@@ -116,7 +138,7 @@ class AlbertForMultipleChoice(AlbertPreTrainedModel):
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(reshaped_logits, labels)
-        output = (reshaped_logits,) + outputs[2:]
+        output = (reshaped_logits,)
         return ((loss,) + output) if loss is not None else output
 
 
@@ -253,34 +275,14 @@ class SelfAttention(nn.Module):
         context_layer = torch.matmul(attention_probs, value_layer)
         return context_layer,attention_scores
 
-class SummaryAttentionLayer(nn.Module):
-    '''
-    this layer summaries representation of all commonsenses,
-    and outputs their attention score
-    seems to be a good idea!
-    '''
-    def __init__(self,hidden_size):
-        super().__init__()
-        self.w = nn.Parameter(torch.FloatTensor(1,hidden_size))
-
-    def forward(self,x):
-        x = F.tanh(x)
-        x_t = torch.transpose(x,-2,-1)
-        pdb.set_trace()
-        inter_attens = F.softmax(torch.matmul(self.w,x_t),dim=-1)
-        output = F.tanh(torch.matmul(inter_attens,x))
-        output = output.squeeze(-2)
-        return output
-
-
 class BertAttRanker(BertPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
         self.cs_len = cs_len
         self.bert = BertModel(config)
         self.self_att = SelfAttention(config)
-        # self.classifier = nn.Linear(config.hidden_size,1)
-        self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
+        self.classifier = nn.Linear(config.hidden_size,1)
+        # self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
 
@@ -314,10 +316,17 @@ class BertAttRanker(BertPreTrainedModel):
 
         pooled_output = bert_outputs[1]
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
+
         atten_output,attention_scores = self.self_att(reshaped_output)
         attention_scores = attention_scores.view(batch_size,num_choices,-1)
-        reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
-        logits = self.classifier(reshaped_output)
+        # attention summary 
+        atten_output = atten_output.view(batch_size,num_choices,self.cs_len,-1)
+        attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(2)
+        atten_output = torch.tanh(torch.matmul(attention_scores,atten_output)).squeeze(2)
+
+        # reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
+
+        logits = self.classifier(atten_output)
         reshaped_logits = logits.view(-1, num_choices)
         
         outputs = (reshaped_logits,attention_scores)
@@ -329,14 +338,14 @@ class BertAttRanker(BertPreTrainedModel):
 
         return outputs
 
-class BertAttRankerDontRank(BertPreTrainedModel):
+class BertCSmean(BertPreTrainedModel):
     def __init__(self, config, cs_len):
         super().__init__(config)
         self.cs_len = cs_len
         self.bert = BertModel(config)
         # self.self_att = SelfAttention(config) don't rerank
-        # self.classifier = nn.Linear(config.hidden_size,1)
-        self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
+        self.classifier = nn.Linear(config.hidden_size,1)
+        # self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
 
@@ -370,7 +379,9 @@ class BertAttRankerDontRank(BertPreTrainedModel):
 
         pooled_output = bert_outputs[1] # (bz*num_choice*cslen,hz)
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
-        reshaped_output = reshaped_output.view(int(batch_size*num_choices),self.cs_len*pooled_output.size(-1))
+        # pdb.set_trace()
+        reshaped_output = torch.mean(reshaped_output,dim = -2)
+        # reshaped_output = reshaped_output.view(int(batch_size*num_choices),self.cs_len*pooled_output.size(-1))
         logits = self.classifier(reshaped_output)
         reshaped_logits = logits.view(-1, num_choices)
 
@@ -388,12 +399,11 @@ class AlbertAttRanker(AlbertPreTrainedModel):
         super().__init__(config)
         self.cs_len = cs_len
         self.albert = AlbertModel(config)
+        self.sequence_summary = SequenceSummaryLayer(config.hidden_size,4)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.self_att = SelfAttention(config)
-        self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
+        self.classifier = nn.Linear(config.hidden_size,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.init_weights()
-
         self.init_weights()
 
     def forward(
@@ -411,8 +421,6 @@ class AlbertAttRanker(AlbertPreTrainedModel):
     ):
         batch_size,input_size = input_ids.shape[:2]
         num_choices = int(input_size/self.cs_len)
-        # num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
-
         input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
         attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
         token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
@@ -428,18 +436,25 @@ class AlbertAttRanker(AlbertPreTrainedModel):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             head_mask=head_mask,
-            inputs_embeds=inputs_embeds
+            inputs_embeds=inputs_embeds,
+            output_hidden_states = True
         )
-        pooled_output = outputs[1]
+        hidden_output = outputs[2]
+        pooled_output = self.sequence_summary(outputs[2])
         pooled_output = self.dropout(pooled_output)
-        
-        reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
 
+        reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
+        # pdb.set_trace()
         atten_output,attention_scores = self.self_att(reshaped_output)
         attention_scores = attention_scores.view(batch_size,num_choices,-1)
-        reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
-        logits = self.classifier(reshaped_output)
+        # attention summary 
+        atten_output = atten_output.view(batch_size,num_choices,self.cs_len,-1)
+        attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(2)
+        atten_output = torch.tanh(torch.matmul(attention_scores,atten_output)).squeeze(2)
+        
+        logits = self.classifier(atten_output)
         reshaped_logits = logits.view(-1, num_choices)
+        
         outputs = (reshaped_logits,attention_scores)
 
         if labels is not None:
@@ -486,65 +501,6 @@ class RobertaAttRanker(BertPreTrainedModel):
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
         
-        reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
-
-        atten_output = self.self_att(reshaped_output)
-
-        reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
-        logits = self.classifier(reshaped_output)
-        reshaped_logits = logits.view(-1, num_choices)
-
-        outputs = (reshaped_logits,)
-
-        if labels is not None:
-            loss_fct = CrossEntropyLoss()
-            loss = loss_fct(reshaped_logits, labels)
-            outputs = (loss,) + outputs
-
-        return outputs
-
-class XLNetAttRanker(XLNetPreTrainedModel):
-    def __init__(self, config, cs_len):
-        super().__init__(config)
-        self.cs_len = cs_len
-        self.transformer = XLNetModel(config)
-        self.sequence_summary = SequenceSummary(config)
-        self.self_att = SelfAttention(config)
-        self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
-        self.dropout = nn.Dropout(config.dropout)
-        self.init_weights()
-
-    def forward(self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
-        labels=None,
-        output_attentions=False,
-    ):
-        batch_size,input_size = input_ids.shape[:2]
-        num_choices = int(input_size/self.cs_len)
-        input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
-        attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
-        token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
-        position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
-        inputs_embeds = (
-            inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
-            if inputs_embeds is not None
-            else None
-        )
-
-
-        transformer_outputs = self.transformer(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids
-        )
-
-        pooled_output = self.sequence_summary(transformer_outputs[0])
-        pooled_output = self.dropout(pooled_output)
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
 
         atten_output = self.self_att(reshaped_output)
