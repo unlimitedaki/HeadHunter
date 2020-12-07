@@ -336,15 +336,11 @@ def train(args):
             # save the model in cpu way
             import copy
             model = copy.deepcopy(model_parallel.models[0])
-            # model = type(model_parallel.models[0])()
-            # model.load_state_dict(model_parallel.models[0].state_dict())
-            # model = model_parallel.models[0]
             model = model.cpu()
             predictions,attention_scores = truncate_prediction(len(dev_examples),predictions,attention_scores)
             acc = correct_count / len(dev_examples)
         else:
-            train_loop_fn(model,train_dataloader,device,in_optimizer = optimizer,in_scheduler = scheduler)
-            # train_loop_fn(model,train_dataloader,device,None)
+            train_loop_fn(model,train_dataloader,device,None,in_optimizer = optimizer,in_scheduler = scheduler)
             correct_count, predictions, attention_scores = test_loop_fn(model,dev_dataloader,device,None)
             acc = correct_count / len(dev_examples)
             acc = acc.cpu().item() # tpu result don't need to switch device 
