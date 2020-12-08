@@ -54,6 +54,7 @@ apex/contrib/csrc/multihead_attn/encdec_multihead_attn_norm_add_cuda.cu
 apex/contrib/csrc/multihead_attn/layer_norm.h
 apex/contrib/csrc/multihead_attn/masked_softmax_dropout.cpp
 apex/contrib/csrc/multihead_attn/masked_softmax_dropout_cuda.cu
+apex/contrib/csrc/multihead_attn/philox.h
 apex/contrib/csrc/multihead_attn/self_multihead_attn.cpp
 apex/contrib/csrc/multihead_attn/self_multihead_attn_bias.cpp
 apex/contrib/csrc/multihead_attn/self_multihead_attn_bias_additive_mask.cpp
@@ -68,6 +69,8 @@ apex/contrib/csrc/optimizers/fused_adam_cuda.cpp
 apex/contrib/csrc/optimizers/fused_adam_cuda_kernel.cu
 apex/contrib/csrc/optimizers/fused_lamb_cuda.cpp
 apex/contrib/csrc/optimizers/fused_lamb_cuda_kernel.cu
+apex/contrib/csrc/optimizers/multi_tensor_distopt_adam.cpp
+apex/contrib/csrc/optimizers/multi_tensor_distopt_adam_kernel.cu
 apex/contrib/csrc/optimizers/multi_tensor_distopt_lamb.cpp
 apex/contrib/csrc/optimizers/multi_tensor_distopt_lamb_kernel.cu
 apex/contrib/csrc/xentropy/interface.cpp
@@ -109,6 +112,7 @@ apex/contrib/sparsity/test/toy_problem.py
 apex/contrib/test/test_label_smoothing.py
 apex/contrib/test/multihead_attn/test_encdec_multihead_attn.py
 apex/contrib/test/multihead_attn/test_encdec_multihead_attn_norm_add.py
+apex/contrib/test/multihead_attn/test_fast_self_multihead_attn_bias.py
 apex/contrib/test/multihead_attn/test_mha_fused_softmax.py
 apex/contrib/test/multihead_attn/test_self_multihead_attn.py
 apex/contrib/test/multihead_attn/test_self_multihead_attn_norm_add.py
@@ -267,6 +271,7 @@ tests/L0/run_fp16util/test_fp16util.py
 tests/L0/run_fused_layer_norm/test_fused_layer_norm.py
 tests/L0/run_mlp/test_mlp.py
 tests/L0/run_optimizers/__init__.py
+tests/L0/run_optimizers/test_dist_adam.py
 tests/L0/run_optimizers/test_fused_optimizer.py
 tests/L0/run_optimizers/test_lamb.py
 tests/L0/run_pyprof_data/__init__.py
