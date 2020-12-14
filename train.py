@@ -197,6 +197,7 @@ def train(args):
     scheduler = None
     def train_loop_fn(model,loader,device,context,in_optimizer = None, in_scheduler = None):
         nonlocal t_total,train_step,device_num 
+        model.cs_len = args.cs_len
         # t_total = len(loader) * args.num_train_epochs
         if not args.tpu :
             optimizer = in_optimizer
@@ -255,6 +256,7 @@ def train(args):
                 logger.info("device:[%s] average_step_loss=%s @ step = %s on epoch = %s",device,str(avg_loss),str(step+1),str(epoch+1))
     
     def test_loop_fn(model,loader,device,context):
+        model.cs_len = args.dev_cs_len
         # for dev 
         model.eval()
         torch.cuda.empty_cache()
