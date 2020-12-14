@@ -349,7 +349,7 @@ def train(args):
         # save model, save status 
         # pdb.set_trace()
         logger.info("DEV ACC : {}% on Epoch {}".format(str(acc * 100),str(epoch)))
-        prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
+        # prediction_json = make_predictions(args,dev_examples,predictions,attention_scores,omcs_corpus,"dev")
         
         if args.save_method == "Best_Current":
             if acc > status["best_Acc"]:
