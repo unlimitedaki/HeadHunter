@@ -445,7 +445,6 @@ class AlbertAttRanker(AlbertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
 
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
-        # pdb.set_trace()
         atten_output,attention_scores = self.self_att(reshaped_output)
         attention_scores = attention_scores.view(batch_size,num_choices,-1)
         # attention summary 
@@ -471,7 +470,7 @@ class RobertaAttRanker(BertPreTrainedModel):
         self.cs_len = cs_len
         self.roberta = RobertaModel(config)
         self.self_att = SelfAttention(config)
-        self.classifier = nn.Linear(config.hidden_size*self.cs_len,1)
+        self.classifier = nn.Linear(config.hidden_size,1)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.init_weights()
 
@@ -503,11 +502,14 @@ class RobertaAttRanker(BertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
         
         reshaped_output = pooled_output.view(int(batch_size*num_choices),self.cs_len,pooled_output.size(-1))
+        atten_output,attention_scores = self.self_att(reshaped_output)
+        attention_scores = attention_scores.view(batch_size,num_choices,-1)
+        # attention summary 
+        atten_output = atten_output.view(batch_size,num_choices,self.cs_len,-1)
+        attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(2)
+        atten_output = torch.tanh(torch.matmul(attention_scores,atten_output)).squeeze(2)
 
-        atten_output = self.self_att(reshaped_output)
-
-        reshaped_output = atten_output.view(int(batch_size*num_choices),self.cs_len*atten_output.size(-1))
-        logits = self.classifier(reshaped_output)
+        logits = self.classifier(atten_output)
         reshaped_logits = logits.view(-1, num_choices)
 
         outputs = (reshaped_logits,)
