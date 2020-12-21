@@ -205,7 +205,7 @@ def train(args):
         # if not args.tpu :
         #     nonlocal optimizer, scheduler
         else:
-            logger.info("init optimizer inside train loop while using tpu")
+            # logger.info("init optimizer inside train loop while using tpu")
             no_decay = ["bias", "LayerNorm.weight"]
             optimizer_grouped_parameters = [
                 {
