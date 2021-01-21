@@ -281,6 +281,95 @@ def feature_padding(args,
     print("{} set is padded to {} examples".format(data_type,str(target_number)))
     return all_input_ids, all_attention_masks, all_token_type_ids, all_labels
 
+class CSQADataset(torch.utils.data.Dataset):
+    def __init__(self, encodings, labels):
+        self.encodings = encodings
+        self.labels = labels
+
+    def __getitem__(self, idx):
+        item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
+        item['labels'] = torch.tensor(self.labels[idx])
+        return item
+
+    def __len__(self):
+        return len(self.labels)
+
+class CSQALinearProcessor(CSQAProcessor):
+    def __init__(self):
+        super().__init__()
+
+    # def encode(example):
+    #     question = example.question
+    #     endings = example.endings
+    #     label = example.label
+    #     for ending in endings:
+
+
+    def convert_examples_to_examples(self,
+        tokenizer,
+        examples,
+        question_seq_len,
+        answer_seq_len,
+        cs_seq_len
+        ):
+        # def encode()
+        def encode(example):
+            cls = tokenizer.cls_token_id
+            sep = tokenizer.sep_token_id
+            pad = tokenizer.pad_token_id
+            question = example.question
+            endings = example.endings
+            label = example.label
+            # context = 
+            input_ids = []
+            attention_mask = []
+            token_type_ids = []
+            q_tokens = tokenizer(question,add_special_tokens=False,padding = 'max_length', truncation=True,max_length = question_seq_len-1 )
+            for ending_index, ending in enumerate(endings):
+                cs_list = example.context[ending_index]
+                # pdb.set_trace()
+                try:
+                    cs_tokens = tokenizer(cs_list,add_special_tokens=False,padding = 'max_length', truncation=True,max_length = cs_seq_len-1)
+                    cs_joint_input_ids = []
+                    cs_joint_attention_mask = []
+                    # join cs encodings
+                    for i,cs in enumerate(cs_tokens['input_ids']):
+                        cs_joint_input_ids += [sep] + cs
+                        cs_joint_attention_mask += [1] + cs_tokens['attention_mask'][i]
+                except:
+                    cs_joint_input_ids = [pad] * len(cs_list)*cs_seq_len
+                    cs_joint_attention_mask = [0] * len(cs_list)*cs_seq_len
+                a_tokens = tokenizer(ending,add_special_tokens=False,padding = 'max_length', truncation=True,max_length = answer_seq_len-1)
+                
+                # concat all tokens
+                joint_input_ids = [cls] + q_tokens['input_ids'] +  [sep] + a_tokens['input_ids'] + cs_joint_input_ids
+                joint_attention_mask = [1] + q_tokens['attention_mask'] + [1] + a_tokens['attention_mask'] + cs_joint_attention_mask
+                joint_token_type_ids = [1] * len(joint_attention_mask)
+                joint_token_type_ids[:len(q_tokens['input_ids'])+1] = [0] * (len(q_tokens['input_ids'])+1)
+
+                input_ids.append(joint_input_ids)
+                attention_mask.append(joint_attention_mask)
+                token_type_ids.append(joint_token_type_ids)
+            return input_ids, attention_mask, token_type_ids, label
+
+
+                
+        # initialize encoding, encoding 
+        encodings = {}
+        encodings["input_ids"] = []
+        encodings["attention_mask"] = []
+        encodings["token_type_ids"] = []
+        labels = []
+    
+
+        for example in tqdm(examples):
+            input_ids, attention_mask, token_type_ids, label = encode(example)
+            encodings["input_ids"].append(input_ids)
+            encodings["attention_mask"].append(attention_mask) 
+            encodings["token_type_ids"].append(token_type_ids)
+            labels.append(label)
+        dataset = CSQADataset(encodings,labels)
+        return dataset
 
 def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True):
     '''
@@ -302,6 +391,7 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
     if "rerank_csqa" in args.task_name:
         processor = CSQARankerProcessor()
         max_length = args.max_length
+    elif ""
     else:
         processor = CSQAProcessor()
         max_length = args.max_length + 12 * args.cs_len
@@ -318,28 +408,17 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
         else:
             examples = put_in_cs(examples,cs_data,omcs_corpus,args.cs_len)
 
-    features = processor.convert_examples_to_features(tokenizer,examples,max_length,is_training)
+    dataset = processor.convert_examples_to_features(tokenizer,examples,max_length,is_training)
     
-    all_input_ids = torch.tensor([f.select_field("input_ids") for f in features], dtype=torch.long)
-    all_attention_masks = torch.tensor([f.select_field("attention_mask") for f in features], dtype=torch.long)
-    all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
-    all_labels = torch.tensor([f.label for f in features], dtype=torch.long) if is_training else None
-    if is_training :
-        if args.tpu:
-            all_input_ids, all_attention_masks, all_token_type_ids, all_labels = feature_padding(args, data_type, all_input_ids, all_attention_masks, all_token_type_ids, all_labels)
+    # all_input_ids = torch.tensor([f.select_field("input_ids") for f in features], dtype=torch.long)
+    # all_attention_masks = torch.tensor([f.select_field("attention_mask") for f in features], dtype=torch.long)
+    # all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
+    # all_labels = torch.tensor([f.label for f in features], dtype=torch.long) if is_training else None
+    # if is_training :
+    #     if args.tpu:
+    #         all_input_ids, all_attention_masks, all_token_type_ids, all_labels = feature_padding(args, data_type, all_input_ids, all_attention_masks, all_token_type_ids, all_labels)
 
-        dataset = TensorDataset(all_input_ids, all_attention_masks, all_token_type_ids, all_labels)   # Dataset wrapping tensors.
-    else:
-        dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
-    # data = {}
-    # data["examples"],data["features"],data["dataset"] = examples,features,dataset
-    # if not os.path.exists(cache_dir):
-    #     os.makedirs(cache_dir)
-    # with open(cache_path,'wb') as f:
-    #     torch.save(f,data)
+    #     dataset = TensorDataset(all_input_ids, all_attention_masks, all_token_type_ids, all_labels)   # Dataset wrapping tensors.
     # else:
-    #     print("load from {}".format(cache_path))
-    #     with open(cache_path,'rb') as f:
-    #         data = torch.load(f)
-    #         examples,features,dataset = data["examples"],data["features"],data["dataset"] 
-    return examples,features,dataset
+    #     dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
+    return dataset
