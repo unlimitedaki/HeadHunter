@@ -98,7 +98,7 @@ def select_model(args,model_name = None):
     elif args.task_name == "rerank_csqa_without_rerank":
         if "bert" in model_name:
             return BertCSmean.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
-    elif args.task_name = "KRD_linear":
+    elif args.task_name == "KRD_linear":
             return BertForLinearKRD.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len,cs_seq_len = args.cs_seq_len, query_len = args.query_len)
 
     else:
@@ -142,7 +142,7 @@ def train(args):
     omcs_corpus = load_omcs(args)
     tokenizer = select_tokenizer(args)
 
-    train_dataset = load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training=True)
+    train_dataset = load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train",is_training=True)
     dev_dataset = load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev",is_training=True)
 
     # setup compute_metrics, note that this kind of outputs must come from transformers library
@@ -162,8 +162,7 @@ def train(args):
     # Train!
     trainer.train()
 
-def main():
-    if __name__ == "__main__":
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # data arguments
     parser.add_argument("--data_dir",type = str,default = "dataset/CSQA")
@@ -188,7 +187,9 @@ def main():
     parser.add_argument("--per_device_eval_batch_size", default=6, type=int, help="Batch size for eval.")
     parser.add_argument("--logging_steps",default = 400,type = int,help = "output current average loss of training")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument("")
+    parser.add_argument("--cs_seq_len", default = 20, type = int, help= "Max length of cs")
+    parser.add_argument("--question_seq_len", default = 64, type = int , help = "Max length of question")
+    parser.add_argument("--answer_seq_len",default = 16, type = int, help = "Max length of answer")
     parser.add_argument("--cs_len",type = int, default = 5)
     parser.add_argument("--dev_cs_len",type = int, default = 0)
     # settings

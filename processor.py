@@ -298,21 +298,13 @@ class CSQALinearProcessor(CSQAProcessor):
     def __init__(self):
         super().__init__()
 
-    # def encode(example):
-    #     question = example.question
-    #     endings = example.endings
-    #     label = example.label
-    #     for ending in endings:
-
-
     def convert_examples_to_examples(self,
         tokenizer,
         examples,
-        question_seq_len,
-        answer_seq_len,
-        cs_seq_len
+        question_seq_len = 64,
+        answer_seq_len = 16,
+        cs_seq_len = 20
         ):
-        # def encode()
         def encode(example):
             cls = tokenizer.cls_token_id
             sep = tokenizer.sep_token_id
@@ -382,16 +374,11 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
         file_name = os.path.join(args.data_dir,args.test_file)
     else :
         file_name = os.path.join(args.data_dir,args.train_file)
-    # cache_dir = os.path.join(args.output_dir,"feature_cache")
-    # cache_name = "cached_{}_{}_{}_{}".format(data_type,args.cs_mode,args.task_name,args.cs_len)
-    # cache_path = os.path.join(cache_dir,cache_name)
-    # print(cache_path)
-    # if not os.path.exists(cache_path):
-    
     if "rerank_csqa" in args.task_name:
         processor = CSQARankerProcessor()
         max_length = args.max_length
-    elif ""
+    elif "KRD_linear" in args.task_name:
+        processor = CSQALinearProcessor()
     else:
         processor = CSQAProcessor()
         max_length = args.max_length + 12 * args.cs_len
@@ -407,18 +394,15 @@ def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True
             examples = put_in_cs(examples,cs_data,omcs_corpus,args.dev_cs_len)
         else:
             examples = put_in_cs(examples,cs_data,omcs_corpus,args.cs_len)
-
-    dataset = processor.convert_examples_to_features(tokenizer,examples,max_length,is_training)
+    processor = CSQALinearProcessor()
+    # pdb.set_trace()
+    dataset = processor.convert_examples_to_features(
+            tokenizer = tokenizer,
+            examples = examples,
+            question_seq_len = args.question_seq_len,
+            answer_seq_len = args.answer_seq_len,
+            cs_seq_len = args.cs_seq_len
+            )
     
-    # all_input_ids = torch.tensor([f.select_field("input_ids") for f in features], dtype=torch.long)
-    # all_attention_masks = torch.tensor([f.select_field("attention_mask") for f in features], dtype=torch.long)
-    # all_token_type_ids = torch.tensor([f.select_field("token_type_ids") for f in features], dtype=torch.long)
-    # all_labels = torch.tensor([f.label for f in features], dtype=torch.long) if is_training else None
-    # if is_training :
-    #     if args.tpu:
-    #         all_input_ids, all_attention_masks, all_token_type_ids, all_labels = feature_padding(args, data_type, all_input_ids, all_attention_masks, all_token_type_ids, all_labels)
 
-    #     dataset = TensorDataset(all_input_ids, all_attention_masks, all_token_type_ids, all_labels)   # Dataset wrapping tensors.
-    # else:
-    #     dataset = TensorDataset(all_input_ids,all_attention_masks,all_token_type_ids)
     return dataset
