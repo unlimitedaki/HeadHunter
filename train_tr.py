@@ -99,7 +99,7 @@ def select_model(args,model_name = None):
         if "bert" in model_name:
             return BertCSmean.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
     elif args.task_name == "KRD_linear":
-            return BertForLinearKRD.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len,cs_seq_len = args.cs_seq_len, query_len = args.query_len)
+            return BertForLinearKRD.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len,cs_seq_len = args.cs_seq_len, query_len = args.question_seq_len + args.answer_seq_len)
 
     else:
         if "albert" in model_name:
@@ -150,7 +150,7 @@ def train(args):
         predictions, label_ids = eval_predictions
         preds = np.argmax(predictions, axis=1)
         return {"accuracy": (preds == label_ids).astype(np.float32).mean().item()}
-    
+    model = select_model(args)
     # setup trainer
     trainer = Trainer(
         model=model,                         # the instantiated 🤗 Transformers model to be trained

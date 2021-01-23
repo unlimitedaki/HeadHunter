@@ -298,13 +298,21 @@ class CSQALinearProcessor(CSQAProcessor):
     def __init__(self):
         super().__init__()
 
-    def convert_examples_to_examples(self,
+    # def encode(example):
+    #     question = example.question
+    #     endings = example.endings
+    #     label = example.label
+    #     for ending in endings:
+
+
+    def convert_examples_to_features(self,
         tokenizer,
         examples,
-        question_seq_len = 64,
-        answer_seq_len = 16,
-        cs_seq_len = 20
+        question_seq_len,
+        answer_seq_len,
+        cs_seq_len
         ):
+        # def encode()
         def encode(example):
             cls = tokenizer.cls_token_id
             sep = tokenizer.sep_token_id
@@ -361,6 +369,8 @@ class CSQALinearProcessor(CSQAProcessor):
             encodings["token_type_ids"].append(token_type_ids)
             labels.append(label)
         dataset = CSQADataset(encodings,labels)
+        # dataset.encodings = encodings
+        # dataset.labels = labels
         return dataset
 
 def load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,data_type,is_training=True):

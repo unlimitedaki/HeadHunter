@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from transformers import BertTokenizer,BertModel
 from transformers.modeling_outputs import MultipleChoiceModelOutput
+from torch.nn import CrossEntropyLoss
 import torch.nn as nn
 
 class AttentionLayer(nn.Module):
