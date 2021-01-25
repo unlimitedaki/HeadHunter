@@ -123,7 +123,17 @@ def train(args):
     output_dir = os.path.join(args.output_dir,args.save_model_name)
     logging_dir = os.path.join(output_dir,"logging")
 
+    # loading data
+    omcs_corpus = load_omcs(args)
+    tokenizer = select_tokenizer(args)
+
+    train_dataset = load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train",is_training=True)
+    dev_dataset = load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev",is_training=True)
+
+
     # setup trainig arguments
+    save_steps = len(train_dataset)//(args.per_device_train_batch_size*args.gradient_accumulation_steps)
+    print("save model in {} steps".format(save_steps))
     training_args = TrainingArguments(
         output_dir = output_dir,          # output directory
         num_train_epochs = args.num_train_epochs,              # total number of training epochs
@@ -135,15 +145,11 @@ def train(args):
         logging_steps = args.logging_steps,
         evaluation_strategy = "epoch",
         gradient_accumulation_steps = args.gradient_accumulation_steps,
-        fp16 = args.fp16
+        fp16 = args.fp16,
+        save_steps = save_steps
     )
     
-    # loading data
-    omcs_corpus = load_omcs(args)
-    tokenizer = select_tokenizer(args)
-
-    train_dataset = load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train",is_training=True)
-    dev_dataset = load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev",is_training=True)
+    
 
     # setup compute_metrics, note that this kind of outputs must come from transformers library
     def compute_metrics(eval_predictions):
