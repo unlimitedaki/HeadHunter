@@ -1,30 +1,33 @@
-import os 
-import sys
+import argparse
 import json
 import logging
-import argparse
-import time
+import os
 import pdb
 import random
+import sys
+import time
+
 if os.path.exists("external_libraries"):
     sys.path.append('external_libraries')
 
 # third-part libraries
 import numpy as np
-from apex import amp
-from tqdm.notebook import tqdm
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset, DistributedSampler
 import transformers
-from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
-from transformers import Trainer, TrainingArguments
-from transformers import AdamW,get_linear_schedule_with_warmup
+from apex import amp
+from torch.utils.data import (DataLoader, DistributedSampler, RandomSampler,
+                              SequentialSampler, TensorDataset)
+from tqdm.notebook import tqdm
+from transformers import (AdamW, AlbertTokenizer, BertModel, BertTokenizer,
+                          RobertaTokenizer, Trainer, TrainingArguments,
+                          XLNetTokenizer, get_linear_schedule_with_warmup)
 from transformers.modeling_utils import SequenceSummary
 
-from processor import *
 from model import *
 from modeling_linear import *
+from processor import *
+
 
 # This is ther trainer version of KRD model
 def clean_data(cs_str):

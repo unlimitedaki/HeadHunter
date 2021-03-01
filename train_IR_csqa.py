@@ -1,24 +1,30 @@
-import os 
+import os
 import sys
+
 if os.path.exists("external_libraries"):
     sys.path.append('external_libraries')
-import torch
-import transformers
-import json
-from transformers import BertModel,BertTokenizer,AlbertTokenizer,RobertaTokenizer,XLNetTokenizer
-from tqdm import tqdm
-import logging
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 import argparse
-import time
-import torch.nn as nn
-from transformers import AdamW,get_linear_schedule_with_warmup
-from transformers.modeling_utils import SequenceSummary
+import json
+import logging
 import pdb
+import time
+
 import numpy as np
-from processor import *
-from model import *
+import torch
+import torch.nn as nn
+import transformers
 from apex import amp
+from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
+                              TensorDataset)
+from tqdm import tqdm
+from transformers import (AdamW, AlbertTokenizer, BertModel, BertTokenizer,
+                          RobertaTokenizer, XLNetTokenizer,
+                          get_linear_schedule_with_warmup)
+from transformers.modeling_utils import SequenceSummary
+
+from model import *
+from processor import *
+
 
 def clean_data(cs_str):
     if "The statement " in cs_str:
