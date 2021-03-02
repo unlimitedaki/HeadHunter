@@ -177,7 +177,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_model_name",type = str,default = "bert_csqa_2e-5_wholeQA-Match_cslen5")
     parser.add_argument("--tokenizer_name_or_path",type = str,default = "bert-base-cased")
     parser.add_argument("--origin_model",type = str,default = "bert-base-cased", help = "origin model dir for training")
-    parser.add_argument("--omcs_file",type=str,default = "omcs-free-origin.json")
+    parser.add_argument("--omcs_file",type=tr,default = "omcs-free-origin.json")
     # hyper parameters
     parser.add_argument("--max_length",type=int,default = 80 )
     parser.add_argument("--gradient_accumulation_steps",type=int,default=1,help="Number of updates steps to accumulate before performing a backward/update pass.")

@@ -1,11 +1,12 @@
-from transformers import BertPreTrainedModel
 import pdb
+
 import torch
-import torch.nn.functional as F
-from transformers import BertTokenizer,BertModel
-from transformers.modeling_outputs import MultipleChoiceModelOutput
-from torch.nn import CrossEntropyLoss
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn import CrossEntropyLoss
+from transformers import BertModel, BertPreTrainedModel, BertTokenizer
+from transformers.modeling_outputs import MultipleChoiceModelOutput
+
 
 class AttentionLayer(nn.Module):
     def __init__(self,config):
@@ -16,14 +17,26 @@ class AttentionLayer(nn.Module):
         # self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
     def forward(self,query,source):
+        '''
+        input:
+        - query: [b, cs_len, L1, hidden]
+        - source: [b, cs_len, L2, hidden]
+        
+        output:
+        - attention_scores: [b, cs_len, L2]     <= sum of attention_prob [b, cs_len, L1, L2]
+        - context_layer: [b, cs_len, L1, hidden]
+        '''
         # hidden_states should be (batch_size,document_length,hidden_size)
         query_layer = self.query(query)
         key_layer = self.key(source)
         value_layer = self.value(source)
-        attention_probs = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-        attention_probs = nn.Softmax(dim=-1)(attention_probs)
-        attention_scores = torch.sum(attention_probs,dim = -2)
-        context_layer = torch.matmul(attention_probs, value_layer)
+        
+        attention_probs = torch.matmul(query_layer, key_layer.transpose(-1, -2)) # Q @ K
+        # attention_probs /= query.shape[-1]**(1/2)   # scale
+        attention_probs = nn.Softmax(dim=-1)(attention_probs)   # softmax [b, cs_len, L1, L2]
+        attention_scores = torch.sum(attention_probs,dim = -2)  # [b, cs_len, L2]
+        # attention_scores = torch.sum(attention_probs,dim = -1)  # [b, cs_len, L1]
+        context_layer = torch.matmul(attention_probs, value_layer)  # softmax @ V [b, cs_len, L1, hidden]
         return context_layer,attention_scores
 
 class BertForLinearKRD(BertPreTrainedModel):
@@ -46,12 +59,11 @@ class BertForLinearKRD(BertPreTrainedModel):
         attention_mask=None,
         token_type_ids=None,
         position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
+        head_mask=None, # unuse
+        inputs_embeds=None, # unuse
         labels=None,
-        output_attentions=False,
+        output_attentions=False, # unuse
                 ):
-        # batch_size = input_ids.shape[0]
         batch_size = input_ids.shape[0]
         num_choices = input_ids.shape[1]
         # pdb.set_trace()
@@ -70,9 +82,12 @@ class BertForLinearKRD(BertPreTrainedModel):
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids
-        )
-        pooled_output = outputs[1]
-        sequence_output = outputs[0]
+        )       # BaseModelOutputWithPoolingAndCrossAttentions
+
+        #　pooler_output　Last layer hidden-state of the first token of the sequence (classification token) further processed by a Linear layer and a Tanh activation function. 
+        pooled_output = outputs[1]          # pooler_output  　CLS token
+        sequence_output = outputs[0]       # last_hidden_state
+        
         # separate query and commonsense encoding
         cs_len = int((input_ids.shape[-1] - self.query_len)/ self.cs_seq_len)
         cs_encoding = torch.stack([
@@ -91,7 +106,7 @@ class BertForLinearKRD(BertPreTrainedModel):
         
         # re-distribution module, HeadHunter !
         mean_cs = torch.mean(cq_attoutput,dim = -2)
-        cs_redistribution,attention_scores = self.self_att(mean_cs,mean_cs) # input same matrix to prefrom self-attention 
+        cs_redistribution, attention_scores = self.self_att(mean_cs,mean_cs) # input same matrix to prefrom self-attention 
         attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(1)
         cs_rep = torch.tanh(torch.matmul(attention_scores,cs_redistribution)).squeeze(1)
         
