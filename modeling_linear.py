@@ -113,7 +113,7 @@ class BertForLinearKRD(BertPreTrainedModel):
         cq_attoutput, _ = self.cross_att(cs_encoding,expanded_query_encoding)
         
         # re-distribution module, HeadHunter !
-        mean_cs = torch.mean(cq_attoutput,dim = -2) # [5b, cs_len, hidden] 每条常识聚焦到一个hidden
+        mean_cs = torch.mean(cq_attoutput,dim = -2) # [5b, cs_len, hidden]
         cs_redistribution, attention_scores = self.self_att(mean_cs,mean_cs) # input same matrix to prefrom self-attention
         attention_scores = F.softmax(attention_scores, dim = -1).unsqueeze(1)
 
