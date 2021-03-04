@@ -140,11 +140,13 @@ def train(args):
     # freeze seed
     if args.seed:
         set_seed(args)
+
     # loading data
     omcs_corpus = load_omcs(args)
     tokenizer = select_tokenizer(args)
     _,_,train_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"train")
     dev_examples,_,dev_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"dev")
+    
     # _,_,test_dataset= load_csqa_omcs_dataset(tokenizer,args,omcs_corpus,"test",is_training = False)
     # setup device
     if args.tpu:

@@ -29,7 +29,7 @@ from modeling_linear import *
 from processor import *
 
 
-# This is ther trainer version of KRD model
+# This is the trainer version of KRD model
 def clean_data(cs_str):
     if "The statement " in cs_str:
         cs_str = cs_str.replace("The statement ","")
@@ -46,7 +46,6 @@ def clean_data(cs_str):
         cs_str = cs_str.replace("To understand the event ","")
         cs_str = cs_str.replace(".\", it is important to know that "," because ")
     return cs_str
-
 
 def clean_omcs(file_name):
     corpus = []
@@ -71,7 +70,6 @@ def clean_omcs(file_name):
     corpus = list(set(corpus))
     return corpus
 
-
 def select_tokenizer(args):
     if "albert" in args.origin_model:
         return AlbertTokenizer.from_pretrained(args.origin_model)
@@ -82,13 +80,13 @@ def select_tokenizer(args):
     elif "xlnet" in args.origin_model:
         return XLNetTokenizer.from_pretrained(args.origin_model)
 
-
 def select_model(args,model_name = None):
     if not model_name:
         model_name = args.origin_model
         cache = os.path.join(args.output_dir,"cache")
     else:
         cache = None
+    
     if args.task_name == "rerank_csqa":
         if "albert" in model_name:
             return AlbertAttRanker.from_pretrained(model_name,cache_dir = cache,cs_len = args.cs_len)
@@ -153,6 +151,7 @@ def train(args):
         predictions, label_ids = eval_predictions
         preds = np.argmax(predictions, axis=1)
         return {"accuracy": (preds == label_ids).astype(np.float32).mean().item()}
+        
     model = select_model(args)
     # setup trainer
     trainer = Trainer(
@@ -205,13 +204,15 @@ if __name__ == "__main__":
     parser.add_argument("--seed",type = int,default = None,help = "freeze seed")
     parser.add_argument('--tpu',action = "store_true")
     parser.add_argument('--task_name',type = str, default = "baseline")
-    parser.add_argument("--test",action = "store_true")
-    parser.add_argument("--dev",action = "store_true")
+    parser.add_argument("--mission", type=str, choices=['test','dev','train'], default='train')
+
+    # parser.add_argument("--test",action = "store_true")
+    # parser.add_argument("--dev",action = "store_true")
 
     args = parser.parse_args()
-    if args.test:
-        eval(args,"test")
-    elif args.dev:
-        eval(args,"dev")
-    else:
+
+    if args.mission == "train":
         train(args)
+    else:
+        eval(args, args.mission)
+

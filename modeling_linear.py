@@ -8,6 +8,7 @@ from transformers import BertModel, BertPreTrainedModel, BertTokenizer
 from transformers.modeling_outputs import MultipleChoiceModelOutput
 
 
+
 class AttentionLayer(nn.Module):
     def __init__(self,config):
         super().__init__()
@@ -55,19 +56,25 @@ class BertForLinearKRD(BertPreTrainedModel):
         self.init_weights()
     
     def forward(self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None, # unuse
-        inputs_embeds=None, # unuse
+        input_ids=None, attention_mask=None, token_type_ids=None, position_ids=None,
+        inputs_embeds=None, head_mask=None, output_attentions=False, # unuse 
         labels=None,
-        output_attentions=False, # unuse
-                ):
+        ):
+        '''
+        input_ids [b, 5, seq_len] => [5b, seq_len]
+        
+        => PTM
+        cs_encoding [5b, cs_len, cs_seq_len, hidden]
+        query_encoding [5b, query_len, hidden] => [5b, cs_len, query_len, hidden]
+        
+        => cross_attn
+        qc_attoutput  [5b, cs_len, query_seq_len, hidden]
+        cq_attoutput  [5b, cs_len, cs_seq_len, hidden]
+        
+        '''
         batch_size = input_ids.shape[0]
         num_choices = input_ids.shape[1]
-        # pdb.set_trace()
-        # pdb.set_trace()
+
         input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
         attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
         token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
@@ -84,16 +91,15 @@ class BertForLinearKRD(BertPreTrainedModel):
             token_type_ids=token_type_ids
         )       # BaseModelOutputWithPoolingAndCrossAttentions
 
-        #　pooler_output　Last layer hidden-state of the first token of the sequence (classification token) further processed by a Linear layer and a Tanh activation function. 
-        pooled_output = outputs[1]          # pooler_output  　CLS token
-        sequence_output = outputs[0]       # last_hidden_state
+        pooled_output = outputs.pooler_output   # outputs[1]  CLS token    [5b, hidden]
+        sequence_output = outputs.last_hidden_state       # outputs[0]     [5b, seq_len, hidden] 
         
         # separate query and commonsense encoding
         cs_len = int((input_ids.shape[-1] - self.query_len)/ self.cs_seq_len)
         cs_encoding = torch.stack([
             sequence_output[:,self.query_len+i*self.cs_seq_len:self.query_len+(i+1)*self.cs_seq_len,:] for i in range(cs_len)
         ],
-        dim = 1)
+        dim = 1)    # cs_encoding [5b, cs_len, cs_seq_len, hidden]
 
         # cs_encoding = cs_encoding.view(cs_encoding.shape[0]*self.cs_len,cs_encoding.shape[2],cs_encoding.shape[3])
 
@@ -101,14 +107,18 @@ class BertForLinearKRD(BertPreTrainedModel):
         expanded_query_encoding = query_encoding.unsqueeze(1).expand(query_encoding.shape[0],cs_len,query_encoding.shape[1],query_encoding.shape[2])
 
         # dual attention module 
+        # [5b, cs_len, query_seq_len, hidden]
         qc_attoutput, _ = self.cross_att(expanded_query_encoding,cs_encoding)
+        # [5b, cs_len, cs_seq_len, hidden]
         cq_attoutput, _ = self.cross_att(cs_encoding,expanded_query_encoding)
         
         # re-distribution module, HeadHunter !
-        mean_cs = torch.mean(cq_attoutput,dim = -2)
-        cs_redistribution, attention_scores = self.self_att(mean_cs,mean_cs) # input same matrix to prefrom self-attention 
-        attention_scores = F.softmax(attention_scores,dim = -1).unsqueeze(1)
-        cs_rep = torch.tanh(torch.matmul(attention_scores,cs_redistribution)).squeeze(1)
+        mean_cs = torch.mean(cq_attoutput,dim = -2) # [5b, cs_len, hidden] 每条常识聚焦到一个hidden
+        cs_redistribution, attention_scores = self.self_att(mean_cs,mean_cs) # input same matrix to prefrom self-attention
+        attention_scores = F.softmax(attention_scores, dim = -1).unsqueeze(1)
+
+        cs_rep = torch.tanh(torch.matmul(attention_scores, cs_redistribution)).squeeze(1)
+        
         
         # mean pooling query encoding
         qu_rep = torch.mean(qc_attoutput,dim = -3)
