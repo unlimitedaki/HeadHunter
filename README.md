@@ -1,2 +1,2 @@
-# rerank_CSQA
-CSQA-attention-ranker
+# HeadHunter FOR Commensense QA
+
